@@ -5,9 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.security.Principal;
 import java.util.*;
 
@@ -16,72 +14,141 @@ import java.util.*;
  * @since 2025/2/10 21:17
  */
 public class HttpServletRequestImpl implements HttpServletRequest {
+    private static final String NO_CHECK_AUTH_TYPE = "no-check";
     private final HttpExchange httpExchange;
+    private final Headers requestHeaders;
+    private final ServletContext servletContext;
+    private final ServletInputStream servletInputStream;
+    private String authType = NO_CHECK_AUTH_TYPE;
+    private Cookie[] cookies;
+    private final String requestId;
+    private final Map<String, String[]> parameterMap;
+    private final Map<String, Object> attributeMap;
+    private final boolean isSecure;
 
-    public HttpServletRequestImpl(HttpExchange httpExchange) {
+    public HttpServletRequestImpl(HttpExchange httpExchange, ServletContext servletContext) {
         this.httpExchange = httpExchange;
-        Headers requestHeaders = httpExchange.getRequestHeaders();
-        requestHeaders.get("");
+        this.requestHeaders = httpExchange.getRequestHeaders();
+        this.servletInputStream = new ServletInputStreamImpl(httpExchange.getRequestBody());
+        this.servletContext = servletContext;
+        this.parameterMap = new HashMap<>();
+        this.attributeMap = new HashMap<>();
+        this.requestId = UUID.randomUUID().toString();
+        this.isSecure = httpExchange.getRequestURI().getScheme().equals("https");
     }
 
     @Override
     public String getAuthType() {
-        return "";
+        if (Objects.equals(authType, NO_CHECK_AUTH_TYPE)) {
+            determineAuthType();
+        }
+        return authType;
+    }
+
+    /**
+     * 仅支持 Basic 和 Digest 认证方式
+     */
+    private void determineAuthType() {
+        List<String> authorization = this.requestHeaders.get("Authorization");
+        authType = null;
+        if (authorization != null && !authorization.isEmpty()) {
+            String auth = authorization.get(0);
+            if (auth.startsWith("Basic ")) {
+                authType = BASIC_AUTH;
+            } else if (auth.startsWith("Digest ")) {
+                authType = DIGEST_AUTH;
+            }
+        }
     }
 
     @Override
     public Cookie[] getCookies() {
-        return new Cookie[0];
+        if (cookies == null) {
+            parseCookies();
+        }
+        return cookies;
+    }
+
+    private void parseCookies() {
+        List<String> cookieHeaders = this.requestHeaders.get("Cookie");
+        ArrayList<Cookie> cookieList = new ArrayList<>();
+        for (String cookieHeader : cookieHeaders) {
+            cookieHeader = cookieHeader.trim();
+            if (cookieHeader.isEmpty()) {
+                continue;
+            }
+            String[] split = cookieHeader.split(";");
+            for (String s : split) {
+                s = s.trim();
+                String[] split1 = s.split("=");
+                cookieList.add(new Cookie(split1[0], split1[1]));
+            }
+        }
+        cookies = cookieList.toArray(new Cookie[0]);
     }
 
     @Override
     public long getDateHeader(String s) {
-        return 0;
+        String first = this.requestHeaders.getFirst(s);
+        if (first == null) {
+            return -1;
+        }
+        try {
+            return Long.parseLong(first);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException();
+        }
     }
 
     @Override
     public String getHeader(String s) {
-        return "";
+        return this.requestHeaders.getFirst(s);
     }
 
     @Override
     public Enumeration<String> getHeaders(String s) {
-        return null;
+        List<String> headers = requestHeaders.get(s);
+        return headers == null ? null : Collections.enumeration(headers);
     }
 
     @Override
     public Enumeration<String> getHeaderNames() {
-        return null;
+        Set<String> headerNames = requestHeaders.keySet();
+        return Collections.enumeration(headerNames);
     }
 
     @Override
     public int getIntHeader(String s) {
-        return 0;
+        String first = this.requestHeaders.getFirst(s);
+        if (first == null) {
+            return -1;
+        }
+        return Integer.parseInt(first);
     }
 
     @Override
     public String getMethod() {
-        return "";
+        return httpExchange.getRequestMethod();
     }
 
     @Override
     public String getPathInfo() {
-        return "";
+        return httpExchange.getRequestURI().getPath();
     }
 
     @Override
     public String getPathTranslated() {
-        return "";
+        return getPathInfo();
     }
 
     @Override
     public String getContextPath() {
-        return "";
+        return httpExchange.getHttpContext().getPath();
     }
 
     @Override
     public String getQueryString() {
-        return "";
+        return httpExchange.getRequestURI().getQuery();
     }
 
     @Override
@@ -106,17 +173,20 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public String getRequestURI() {
-        return "";
+        return httpExchange.getRequestURI().toString();
     }
 
     @Override
     public StringBuffer getRequestURL() {
-        return null;
+        String s = httpExchange.getRequestURI().toString();
+        int i = s.indexOf("?");
+        s = s.substring(0, i);
+        return new StringBuffer(s);
     }
 
     @Override
     public String getServletPath() {
-        return "";
+        return httpExchange.getRequestURI().getPath();
     }
 
     @Override
@@ -156,17 +226,29 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public void login(String s, String s1) throws ServletException {
-
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public void logout() throws ServletException {
-
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Collection<Part> getParts() throws IOException, ServletException {
-        return List.of();
+        String requestMethod = httpExchange.getRequestMethod();
+        if (!"POST".equals(requestMethod)) {
+            return Collections.emptyList();
+        }
+        String contentType = requestHeaders.getFirst("Content-Type");
+        if (contentType == null) {
+            return Collections.emptyList();
+        }
+        if (contentType.startsWith("multipart/form-data")) {
+            InputStream requestBody = httpExchange.getRequestBody();
+
+        }
+        return Collections.emptyList();
     }
 
     @Override
@@ -181,12 +263,12 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public Object getAttribute(String s) {
-        return null;
+        return attributeMap.get(s);
     }
 
     @Override
     public Enumeration<String> getAttributeNames() {
-        return null;
+        return Collections.enumeration(attributeMap.keySet());
     }
 
     @Override
@@ -201,87 +283,92 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public int getContentLength() {
-        return 0;
+        try {
+            return httpExchange.getRequestBody().available();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public long getContentLengthLong() {
-        return 0;
+        return getContentLength();
     }
 
     @Override
     public String getContentType() {
-        return "";
+        return requestHeaders.getFirst("Content-Type");
     }
 
     @Override
-    public ServletInputStream getInputStream() throws IOException {
-        return null;
+    public ServletInputStream getInputStream() {
+        return servletInputStream;
     }
 
     @Override
     public String getParameter(String s) {
-        return "";
+        String[] params = parameterMap.get(s);
+        return params == null ? null : params[0];
     }
 
     @Override
     public Enumeration<String> getParameterNames() {
-        return null;
+        return Collections.enumeration(parameterMap.keySet());
     }
 
     @Override
     public String[] getParameterValues(String s) {
-        return new String[0];
+        return parameterMap.get(s);
     }
 
     @Override
     public Map<String, String[]> getParameterMap() {
-        return Map.of();
+        return parameterMap;
     }
 
     @Override
     public String getProtocol() {
-        return "";
+        return httpExchange.getProtocol();
     }
 
     @Override
     public String getScheme() {
-        return "";
+        return httpExchange.getRequestURI().getScheme();
     }
 
     @Override
     public String getServerName() {
-        return "";
+        return httpExchange.getRequestURI().getHost();
     }
 
     @Override
     public int getServerPort() {
-        return 0;
+        return httpExchange.getRequestURI().getPort();
     }
 
     @Override
     public BufferedReader getReader() throws IOException {
-        return null;
+        return new BufferedReader(new InputStreamReader(httpExchange.getRequestBody()));
     }
 
     @Override
     public String getRemoteAddr() {
-        return "";
+        return httpExchange.getRemoteAddress().toString();
     }
 
     @Override
     public String getRemoteHost() {
-        return "";
+        return httpExchange.getRemoteAddress().getHostName();
     }
 
     @Override
     public void setAttribute(String s, Object o) {
-
+        attributeMap.put(s, o);
     }
 
     @Override
     public void removeAttribute(String s) {
-
+        attributeMap.remove(s);
     }
 
     @Override
@@ -296,7 +383,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public boolean isSecure() {
-        return false;
+        return isSecure;
     }
 
     @Override
@@ -306,27 +393,27 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public int getRemotePort() {
-        return 0;
+        return httpExchange.getRequestURI().getPort();
     }
 
     @Override
     public String getLocalName() {
-        return "";
+        return httpExchange.getHttpContext().getServer().getAddress().getHostName();
     }
 
     @Override
     public String getLocalAddr() {
-        return "";
+        return httpExchange.getHttpContext().getServer().getAddress().getHostString();
     }
 
     @Override
     public int getLocalPort() {
-        return 0;
+        return httpExchange.getHttpContext().getServer().getAddress().getPort();
     }
 
     @Override
     public ServletContext getServletContext() {
-        return null;
+        return servletContext;
     }
 
     @Override
@@ -361,7 +448,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public String getRequestId() {
-        return "";
+        return requestId;
     }
 
     @Override
