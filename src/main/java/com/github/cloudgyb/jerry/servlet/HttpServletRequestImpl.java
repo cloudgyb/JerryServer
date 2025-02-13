@@ -35,6 +35,30 @@ public class HttpServletRequestImpl implements HttpServletRequest {
         this.attributeMap = new HashMap<>();
         this.requestId = UUID.randomUUID().toString();
         this.isSecure = httpExchange.getRequestURI().getScheme().equals("https");
+        parseParameters();
+    }
+
+    private void parseParameters() {
+        String query = httpExchange.getRequestURI().getQuery();
+        if (query == null || query.trim().isEmpty()) {
+            return;
+        }
+        String[] split = query.split("&");
+        for (String s : split) {
+            String[] split1 = s.split("=");
+            String k = split1[0];
+            String v = "";
+            if (split1.length > 1) {
+                v = split1[1];
+            }
+            String[] values = parameterMap.putIfAbsent(k, new String[]{v});
+            if (values != null) {
+                String[] newValues = new String[values.length + 1];
+                System.arraycopy(values, 0, newValues, 0, values.length);
+                newValues[values.length] = v;
+                parameterMap.put(k, newValues);
+            }
+        }
     }
 
     @Override
