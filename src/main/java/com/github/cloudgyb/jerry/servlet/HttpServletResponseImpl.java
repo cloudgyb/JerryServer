@@ -1,16 +1,18 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.github.cloudgyb.jerry.util.DateUtil;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -21,14 +23,37 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     private boolean isCommit = false;
     private final HttpExchange httpExchange;
     private final Headers responseHeaders;
+    private int statusCode = HttpServletResponse.SC_OK;
+    private String characterEncoding = "utf-8";
+    private ServletOutputStream outputStream;
+    private Locale locale;
 
     public HttpServletResponseImpl(HttpExchange httpExchange) {
         this.httpExchange = httpExchange;
         this.responseHeaders = httpExchange.getResponseHeaders();
+        this.outputStream = new ServletOutputStream() {
+            @Override
+            public boolean isReady() {
+                return false;
+            }
+
+            @Override
+            public void setWriteListener(WriteListener writeListener) {
+
+            }
+
+            @Override
+            public void write(int b) throws IOException {
+
+            }
+        }
     }
 
     @Override
     public void addCookie(Cookie cookie) {
+        if (isCommit) {
+            return;
+        }
         responseHeaders.add("Set-Cookie", CookieEncoder.encode(cookie));
     }
 
@@ -54,6 +79,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
         httpExchange.sendResponseHeaders(sc, bytes.length);
         httpExchange.getResponseBody().write(bytes);
         httpExchange.getResponseBody().flush();
+        isCommit = true;
     }
 
     @Override
@@ -63,102 +89,149 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
-
+        statusCode = sc;
+        responseHeaders.set("Location", location);
+        httpExchange.sendResponseHeaders(sc, 0);
+        httpExchange.getRequestBody().close();
+        isCommit = true;
     }
 
     @Override
     public void setDateHeader(String name, long date) {
-
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        responseHeaders.set(name, DateUtil.getDateRFC5322(date));
     }
 
     @Override
     public void addDateHeader(String name, long date) {
-
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        responseHeaders.add(name, DateUtil.getDateRFC5322(date));
     }
 
     @Override
     public void setHeader(String name, String value) {
-
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        if (value == null) {
+            responseHeaders.remove(name);
+            return;
+        }
+        responseHeaders.set(name, value);
     }
 
     @Override
     public void addHeader(String name, String value) {
-
+        if (name == null || value == null) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        responseHeaders.add(name, value);
     }
 
     @Override
     public void setIntHeader(String name, int value) {
-
+        if (name == null) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        responseHeaders.set(name, "" + value);
     }
 
     @Override
     public void addIntHeader(String name, int value) {
-
+        if (name == null) {
+            return;
+        }
+        if (isCommit) {
+            return;
+        }
+        responseHeaders.add(name, value + "");
     }
 
     @Override
     public void setStatus(int sc) {
-
+        if (isCommit) {
+            return;
+        }
+        statusCode = sc;
     }
 
     @Override
     public int getStatus() {
-        return 0;
+        return statusCode;
     }
 
     @Override
     public String getHeader(String name) {
-        return "";
+        return responseHeaders.getFirst(name);
     }
 
     @Override
     public Collection<String> getHeaders(String name) {
-        return List.of();
+        return responseHeaders.get(name);
     }
 
     @Override
     public Collection<String> getHeaderNames() {
-        return List.of();
+        return responseHeaders.keySet();
     }
 
     @Override
     public String getCharacterEncoding() {
-        return "";
+        return characterEncoding;
     }
 
     @Override
     public String getContentType() {
-        return "";
+        return responseHeaders.getFirst("Content-Type");
     }
 
     @Override
     public ServletOutputStream getOutputStream() throws IOException {
-        return null;
+        return outputStream;
     }
 
     @Override
-    public PrintWriter getWriter() throws IOException {
-        return null;
+    public PrintWriter getWriter() {
+        return new PrintWriter(outputStream, true, Charset.forName(getCharacterEncoding()));
     }
 
     @Override
     public void setCharacterEncoding(String encoding) {
-
+        characterEncoding = encoding;
     }
 
     @Override
     public void setContentLength(int len) {
-
+        responseHeaders.set("Content-Length", len + "");
     }
 
     @Override
     public void setContentLengthLong(long len) {
-
+        responseHeaders.set("Content-Length", len + "");
     }
 
     @Override
     public void setContentType(String type) {
-
+        responseHeaders.set("Content-Type", type);
     }
 
     @Override
@@ -178,12 +251,13 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void resetBuffer() {
-
+        if (isCommit)
+            throw new IllegalStateException();
     }
 
     @Override
     public boolean isCommitted() {
-        return false;
+        return isCommit;
     }
 
     @Override
@@ -193,11 +267,11 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void setLocale(Locale loc) {
-
+        locale = loc;
     }
 
     @Override
     public Locale getLocale() {
-        return null;
+        return locale;
     }
 }
