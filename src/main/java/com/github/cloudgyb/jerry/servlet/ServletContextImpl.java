@@ -4,8 +4,10 @@ import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebInitParam;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.descriptor.JspConfigDescriptor;
-import jakarta.servlet.http.HttpServletMapping;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -68,6 +70,33 @@ public class ServletContextImpl implements ServletContext {
             Collection<String> mappings = servletRegistration.getMappings();
             for (String mapping : mappings) {
                 servletMappings.add(new ServletMapping(servlet, mapping));
+            }
+        }
+    }
+
+    public void process(HttpServletRequest request, HttpServletResponse response) {
+        String requestURI = request.getRequestURI();
+        Servlet servlet = null;
+        for (ServletMapping servletMapping : servletMappings) {
+            boolean match = servletMapping.match(requestURI);
+            if (match) {
+                servlet = servletMapping.servlet;
+                break;
+            }
+        }
+        if (servlet != null) {
+            try {
+                servlet.service(request, response);
+            } catch (ServletException | IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            String resBody404 = "404 NOT FOUND!";
+            try {
+                response.sendError(404, resBody404);
+                response.getOutputStream().close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
     }

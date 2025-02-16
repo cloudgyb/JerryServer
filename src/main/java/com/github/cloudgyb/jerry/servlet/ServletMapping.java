@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
  * @since 2025/2/16 19:39
  */
 public class ServletMapping {
-    private final Servlet servlet;
+    final Servlet servlet;
     private final String urlPattern;
     private final Pattern pattern;
 

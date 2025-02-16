@@ -230,7 +230,12 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void flushBuffer() {
-
+        isCommit = true;
+        try {
+            httpExchange.sendResponseHeaders(statusCode,-1);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

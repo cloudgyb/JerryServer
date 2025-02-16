@@ -6,8 +6,6 @@ import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
-import java.io.IOException;
-
 /**
  * @author cloudgyb
  * @since 2025/2/10 20:51
@@ -20,9 +18,9 @@ public class JerryHttpHandler implements HttpHandler {
     }
 
     @Override
-    public void handle(HttpExchange exchange) throws IOException {
+    public void handle(HttpExchange exchange) {
         HttpServletRequestImpl httpServletRequest = new HttpServletRequestImpl(exchange, servletContext);
         HttpServletResponseImpl httpServletResponse = new HttpServletResponseImpl(exchange);
-
+        servletContext.process(httpServletRequest, httpServletResponse);
     }
 }

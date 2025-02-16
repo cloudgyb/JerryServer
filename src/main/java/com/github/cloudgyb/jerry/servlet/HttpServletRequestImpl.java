@@ -37,7 +37,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
         this.parameterMap = new HashMap<>();
         this.attributeMap = new HashMap<>();
         this.requestId = UUID.randomUUID().toString();
-        this.isSecure = httpExchange.getRequestURI().getScheme().equals("https");
+        this.isSecure = false;
         parseParameters();
     }
 
