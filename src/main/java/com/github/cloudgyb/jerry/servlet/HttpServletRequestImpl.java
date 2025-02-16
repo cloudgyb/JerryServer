@@ -6,6 +6,7 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
 import java.io.*;
+import java.nio.charset.Charset;
 import java.security.Principal;
 import java.util.*;
 
@@ -25,6 +26,8 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     private final Map<String, String[]> parameterMap;
     private final Map<String, Object> attributeMap;
     private final boolean isSecure;
+    private DispatcherType dispatcherType = DispatcherType.REQUEST;
+    private String characterEncoding;
 
     public HttpServletRequestImpl(HttpExchange httpExchange, ServletContext servletContext) {
         this.httpExchange = httpExchange;
@@ -282,7 +285,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public <T extends HttpUpgradeHandler> T upgrade(Class<T> aClass) throws IOException, ServletException {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -297,12 +300,17 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public String getCharacterEncoding() {
-        return "";
+        return characterEncoding;
     }
 
     @Override
-    public void setCharacterEncoding(String s) throws UnsupportedEncodingException {
-
+    public void setCharacterEncoding(String encoding) throws UnsupportedEncodingException {
+        try {
+            Charset.forName(encoding);
+        } catch (Exception e) {
+            throw new UnsupportedEncodingException(e.getMessage());
+        }
+        characterEncoding = encoding;
     }
 
     @Override
@@ -467,7 +475,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public DispatcherType getDispatcherType() {
-        return null;
+        return dispatcherType;
     }
 
     @Override

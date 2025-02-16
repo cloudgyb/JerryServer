@@ -1,49 +1,105 @@
 package com.github.cloudgyb.jerry.servlet;
 
 import jakarta.servlet.*;
+import jakarta.servlet.annotation.WebInitParam;
+import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.descriptor.JspConfigDescriptor;
+import jakarta.servlet.http.HttpServletMapping;
 
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Enumeration;
-import java.util.EventListener;
-import java.util.Map;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 /**
  * @author geng
  * @since 2025/02/12 16:26:56
  */
 public class ServletContextImpl implements ServletContext {
-    @Override
-    public String getContextPath() {
-        return "";
+    private final static int DEFAULT_SESSION_TIMEOUT = 24 * 3600; // one day
+    private final String contextPath;
+    private final Map<String, Object> attributes;
+    private final Map<String, Servlet> nameToServletMap;
+    private final Map<String, ServletRegistration> nameToServletRegistrationMap;
+    private final List<ServletMapping> servletMappings;
+    private String requestCharacterEncoding;
+    private String responseCharacterEncoding;
+    boolean initialized = false;
+    private int sessionTimeout = DEFAULT_SESSION_TIMEOUT;
+
+    public ServletContextImpl(String contextPath) {
+        this.contextPath = contextPath;
+        this.attributes = new HashMap<>();
+        this.nameToServletMap = new HashMap<>();
+        this.nameToServletRegistrationMap = new HashMap<>();
+        this.requestCharacterEncoding = StandardCharsets.UTF_8.toString();
+        this.responseCharacterEncoding = StandardCharsets.UTF_8.toString();
+        this.servletMappings = new ArrayList<>();
+    }
+
+    public ServletContextImpl(String contextPath, int sessionTimeout) {
+        this(contextPath);
+        this.sessionTimeout = sessionTimeout;
+    }
+
+    public void init(Set<Class<? extends Servlet>> servletClasses) {
+        for (Class<? extends Servlet> servletClass : servletClasses) {
+            WebServlet annotation = servletClass.getAnnotation(WebServlet.class);
+            if (annotation == null) {
+                continue;
+            }
+            String servletName = annotation.name() == null || annotation.name().isEmpty() ?
+                    servletClass.getSimpleName() : annotation.name();
+            addServlet(servletName, servletClass);
+        }
+
+        for (String key : nameToServletRegistrationMap.keySet()) {
+            ServletRegistrationImpl servletRegistration = (ServletRegistrationImpl) nameToServletRegistrationMap.get(key);
+            Servlet servlet = servletRegistration.servlet;
+            try {
+                servlet.init(servletRegistration.servletConfig);
+            } catch (ServletException e) {
+                throw new RuntimeException(e);
+            }
+            nameToServletMap.put(key, servlet);
+            Collection<String> mappings = servletRegistration.getMappings();
+            for (String mapping : mappings) {
+                servletMappings.add(new ServletMapping(servlet, mapping));
+            }
+        }
     }
 
     @Override
-    public ServletContext getContext(String uripath) {
+    public String getContextPath() {
+        return contextPath;
+    }
+
+    @Override
+    public ServletContext getContext(String uriPath) {
         return null;
     }
 
     @Override
     public int getMajorVersion() {
-        return 0;
+        return 6;
     }
 
     @Override
     public int getMinorVersion() {
-        return 0;
+        return 1;
     }
 
     @Override
     public int getEffectiveMajorVersion() {
-        return 0;
+        return 6;
     }
 
     @Override
     public int getEffectiveMinorVersion() {
-        return 0;
+        return 1;
     }
 
     @Override
@@ -113,22 +169,22 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public Object getAttribute(String name) {
-        return null;
+        return attributes.get(name);
     }
 
     @Override
     public Enumeration<String> getAttributeNames() {
-        return null;
+        return Collections.enumeration(attributes.keySet());
     }
 
     @Override
     public void setAttribute(String name, Object object) {
-
+        attributes.put(name, object);
     }
 
     @Override
     public void removeAttribute(String name) {
-
+        attributes.remove(name);
     }
 
     @Override
@@ -138,17 +194,47 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public ServletRegistration.Dynamic addServlet(String servletName, String className) {
-        return null;
+        try {
+            Class<?> aClass = Class.forName(className);
+            if (!Servlet.class.isAssignableFrom(aClass)) {
+                throw new RuntimeException(aClass + " isn't a Servlet");
+            }
+            return addServlet(servletName, (Class<? extends Servlet>) aClass);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public ServletRegistration.Dynamic addServlet(String servletName, Servlet servlet) {
-        return null;
+        ServletRegistrationImpl servletRegistration =
+                new ServletRegistrationImpl(servletName, servlet, this);
+        nameToServletRegistrationMap.put(servletName, servletRegistration);
+        WebServlet annotation = servlet.getClass().getAnnotation(WebServlet.class);
+        if (annotation != null) {
+            String[] strings = annotation.urlPatterns();
+            if (strings != null) {
+                servletRegistration.addMapping(strings);
+            }
+            WebInitParam[] webInitParams = annotation.initParams();
+            if (webInitParams != null) {
+                for (WebInitParam webInitParam : webInitParams) {
+                    servletRegistration.setInitParameter(webInitParam.name(), webInitParam.value());
+                }
+            }
+        }
+        return servletRegistration;
     }
 
     @Override
     public ServletRegistration.Dynamic addServlet(String servletName, Class<? extends Servlet> servletClass) {
-        return null;
+        try {
+            Constructor<? extends Servlet> constructor = servletClass.getConstructor();
+            Servlet servlet = constructor.newInstance();
+            return addServlet(servletName, servlet);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -158,17 +244,22 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public <T extends Servlet> T createServlet(Class<T> clazz) throws ServletException {
-        return null;
+        try {
+            return clazz.getConstructor().newInstance();
+        } catch (InstantiationException | IllegalAccessException |
+                 InvocationTargetException | NoSuchMethodException e) {
+            throw new ServletException(e);
+        }
     }
 
     @Override
     public ServletRegistration getServletRegistration(String servletName) {
-        return null;
+        return nameToServletRegistrationMap.get(servletName);
     }
 
     @Override
     public Map<String, ? extends ServletRegistration> getServletRegistrations() {
-        return Map.of();
+        return nameToServletRegistrationMap;
     }
 
     @Override
@@ -263,31 +354,40 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public int getSessionTimeout() {
-        return 0;
+        return sessionTimeout;
     }
 
     @Override
     public void setSessionTimeout(int sessionTimeout) {
-
+        if (initialized) {
+            throw new IllegalStateException("Servlet Context initialized");
+        }
+        this.sessionTimeout = sessionTimeout;
     }
 
     @Override
     public String getRequestCharacterEncoding() {
-        return "";
+        return requestCharacterEncoding;
     }
 
     @Override
     public void setRequestCharacterEncoding(String encoding) {
-
+        if (initialized) {
+            throw new IllegalStateException("Servlet Context initialized");
+        }
+        requestCharacterEncoding = encoding;
     }
 
     @Override
     public String getResponseCharacterEncoding() {
-        return "";
+        return responseCharacterEncoding;
     }
 
     @Override
     public void setResponseCharacterEncoding(String encoding) {
-
+        if (initialized) {
+            throw new IllegalStateException("Servlet Context initialized");
+        }
+        responseCharacterEncoding = encoding;
     }
 }

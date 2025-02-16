@@ -1,5 +1,6 @@
 package com.github.cloudgyb.jerry.http;
 
+import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
@@ -12,14 +13,17 @@ import java.util.concurrent.Executors;
  * @since 2025/2/10 20:45
  */
 public class JerryHttpServer {
+    private static final String contextPath = "/";
+
     public static void main(String[] args) throws IOException {
-        JerryHttpHandler jerryHttpHandler = new JerryHttpHandler();
+        ServletContextImpl servletContext = new ServletContextImpl(contextPath);
+        JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(8888);
         HttpServer httpServer = HttpServer.create(inetSocketAddress, 512);
         Executor executor = httpServer.getExecutor();
         System.out.println(executor);
         httpServer.setExecutor(Executors.newSingleThreadExecutor());
-        httpServer.createContext("/", jerryHttpHandler);
+        httpServer.createContext(contextPath, jerryHttpHandler);
         httpServer.start();
     }
 }

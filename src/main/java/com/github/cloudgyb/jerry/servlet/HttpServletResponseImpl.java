@@ -4,7 +4,6 @@ import com.github.cloudgyb.jerry.util.DateUtil;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -25,28 +24,13 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     private final Headers responseHeaders;
     private int statusCode = HttpServletResponse.SC_OK;
     private String characterEncoding = "utf-8";
-    private ServletOutputStream outputStream;
+    private final ServletOutputStream outputStream;
     private Locale locale;
 
     public HttpServletResponseImpl(HttpExchange httpExchange) {
         this.httpExchange = httpExchange;
         this.responseHeaders = httpExchange.getResponseHeaders();
-        this.outputStream = new ServletOutputStream() {
-            @Override
-            public boolean isReady() {
-                return false;
-            }
-
-            @Override
-            public void setWriteListener(WriteListener writeListener) {
-
-            }
-
-            @Override
-            public void write(int b) throws IOException {
-
-            }
-        }
+        this.outputStream = new ServletOutputStreamImpl(this.httpExchange.getResponseBody());
     }
 
     @Override
