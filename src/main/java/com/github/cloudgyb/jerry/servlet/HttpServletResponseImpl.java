@@ -19,18 +19,43 @@ import java.util.Locale;
  * @since 2025/2/12 21:52
  */
 public class HttpServletResponseImpl implements HttpServletResponse {
-    private boolean isCommit = false;
+    boolean isCommit = false;
     private final HttpExchange httpExchange;
     private final Headers responseHeaders;
     private int statusCode = HttpServletResponse.SC_OK;
     private String characterEncoding = "utf-8";
+    private String contentType = null;
+    private long contentLength = -1;
     private final ServletOutputStream outputStream;
-    private Locale locale;
+    private Locale locale = Locale.getDefault();
 
     public HttpServletResponseImpl(HttpExchange httpExchange) {
         this.httpExchange = httpExchange;
         this.responseHeaders = httpExchange.getResponseHeaders();
-        this.outputStream = new ServletOutputStreamImpl(this.httpExchange.getResponseBody());
+        this.outputStream = new ServletOutputStreamImpl(this.httpExchange, this);
+    }
+
+    void commit() {
+        if (isCommit)
+            return;
+        try {
+            long CL = contentLength;
+            String contentLen = responseHeaders.getFirst("Content-Length");
+            if (contentLen != null && !contentLen.isEmpty()) {
+                try {
+                    responseHeaders.remove("Content-Length");
+                    CL = Long.parseLong(contentLen);
+                } catch (Exception ignore) {
+                }
+            }
+            if (contentType != null) {
+                responseHeaders.set("Content-Type", contentType);
+            }
+            httpExchange.sendResponseHeaders(statusCode, CL);
+            isCommit = true;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -58,12 +83,13 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void sendError(int sc, String msg) throws IOException {
+        statusCode = sc;
         byte[] bytes = msg.getBytes(StandardCharsets.UTF_8);
-        responseHeaders.add("Content-Type", "text/html; charset=utf-8");
-        httpExchange.sendResponseHeaders(sc, bytes.length);
+        responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+        contentLength = bytes.length;
+        commit();
         httpExchange.getResponseBody().write(bytes);
         httpExchange.getResponseBody().flush();
-        isCommit = true;
     }
 
     @Override
@@ -75,17 +101,17 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
         statusCode = sc;
         responseHeaders.set("Location", location);
-        httpExchange.sendResponseHeaders(sc, 0);
+        httpExchange.sendResponseHeaders(sc, -1);
         httpExchange.getRequestBody().close();
         isCommit = true;
     }
 
     @Override
     public void setDateHeader(String name, long date) {
-        if (name == null || name.isEmpty()) {
+        if (isCommit) {
             return;
         }
-        if (isCommit) {
+        if (name == null || name.isEmpty()) {
             return;
         }
         responseHeaders.set(name, DateUtil.getDateRFC5322(date));
@@ -93,10 +119,10 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void addDateHeader(String name, long date) {
-        if (name == null || name.isEmpty()) {
+        if (isCommit) {
             return;
         }
-        if (isCommit) {
+        if (name == null || name.isEmpty()) {
             return;
         }
         responseHeaders.add(name, DateUtil.getDateRFC5322(date));
@@ -104,10 +130,10 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void setHeader(String name, String value) {
-        if (name == null || name.isEmpty()) {
+        if (isCommit) {
             return;
         }
-        if (isCommit) {
+        if (name == null || name.isEmpty()) {
             return;
         }
         if (value == null) {
@@ -185,11 +211,11 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public String getContentType() {
-        return responseHeaders.getFirst("Content-Type");
+        return contentType;
     }
 
     @Override
-    public ServletOutputStream getOutputStream() throws IOException {
+    public ServletOutputStream getOutputStream() {
         return outputStream;
     }
 
@@ -205,22 +231,28 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void setContentLength(int len) {
-        responseHeaders.set("Content-Length", len + "");
+        setContentLengthLong(len);
     }
 
     @Override
     public void setContentLengthLong(long len) {
-        responseHeaders.set("Content-Length", len + "");
+        if (isCommit) {
+            return;
+        }
+        contentLength = len;
     }
 
     @Override
     public void setContentType(String type) {
-        responseHeaders.set("Content-Type", type);
+        contentType = type;
     }
 
     @Override
     public void setBufferSize(int size) {
-
+        if (isCommit) {
+            throw new IllegalStateException("The response is commited!");
+        }
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -229,19 +261,18 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     }
 
     @Override
-    public void flushBuffer() {
-        isCommit = true;
-        try {
-            httpExchange.sendResponseHeaders(statusCode,-1);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    public void flushBuffer() throws IOException {
+        if (!isCommit) {
+            commit();
         }
+        httpExchange.getResponseBody().flush();
     }
 
     @Override
     public void resetBuffer() {
         if (isCommit)
             throw new IllegalStateException();
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -256,6 +287,9 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void setLocale(Locale loc) {
+        if (isCommit) {
+            return;
+        }
         locale = loc;
     }
 

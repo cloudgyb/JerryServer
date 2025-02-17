@@ -1,5 +1,6 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 
@@ -12,10 +13,12 @@ import java.io.OutputStream;
  */
 public class ServletOutputStreamImpl extends ServletOutputStream {
     private WriteListener writeListener;
+    private final HttpServletResponseImpl response;
     private final OutputStream outputStream;
 
-    public ServletOutputStreamImpl(OutputStream outputStream) {
-        this.outputStream = outputStream;
+    public ServletOutputStreamImpl(HttpExchange exchange, HttpServletResponseImpl response) {
+        this.outputStream = exchange.getResponseBody();
+        this.response = response;
     }
 
     @Override
@@ -30,6 +33,9 @@ public class ServletOutputStreamImpl extends ServletOutputStream {
 
     @Override
     public void write(int b) throws IOException {
+        if (!response.isCommitted()) {
+            response.commit();
+        }
         outputStream.write(b);
     }
 
