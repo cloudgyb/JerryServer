@@ -13,9 +13,9 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
     private final String servletName;
     final Servlet servlet;
     final ServletConfigImpl servletConfig;
-    private final ServletContext servletContext;
+    private final ServletContextImpl servletContext;
 
-    public ServletRegistrationImpl(String servletName, Servlet servlet, ServletContext servletContext) {
+    public ServletRegistrationImpl(String servletName, Servlet servlet, ServletContextImpl servletContext) {
         this.servletName = servletName;
         this.servlet = servlet;
         this.servletContext = servletContext;
@@ -25,6 +25,9 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
     @Override
     public Set<String> addMapping(String... urlPatterns) {
         mappings.addAll(Arrays.asList(urlPatterns));
+        for (String urlPattern : urlPatterns) {
+            servletContext.servletMappings.add(new ServletMapping(servlet, urlPattern));
+        }
         return Set.of();
     }
 

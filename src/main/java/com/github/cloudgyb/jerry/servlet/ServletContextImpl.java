@@ -26,7 +26,7 @@ public class ServletContextImpl implements ServletContext {
     private final Map<String, Object> attributes;
     private final Map<String, Servlet> nameToServletMap;
     private final Map<String, ServletRegistration> nameToServletRegistrationMap;
-    private final List<ServletMapping> servletMappings;
+    final List<ServletMapping> servletMappings;
     private String requestCharacterEncoding;
     private String responseCharacterEncoding;
     boolean initialized = false;
@@ -57,21 +57,7 @@ public class ServletContextImpl implements ServletContext {
                     servletClass.getSimpleName() : annotation.name();
             addServlet(servletName, servletClass);
         }
-
-        for (String key : nameToServletRegistrationMap.keySet()) {
-            ServletRegistrationImpl servletRegistration = (ServletRegistrationImpl) nameToServletRegistrationMap.get(key);
-            Servlet servlet = servletRegistration.servlet;
-            try {
-                servlet.init(servletRegistration.servletConfig);
-            } catch (ServletException e) {
-                throw new RuntimeException(e);
-            }
-            nameToServletMap.put(key, servlet);
-            Collection<String> mappings = servletRegistration.getMappings();
-            for (String mapping : mappings) {
-                servletMappings.add(new ServletMapping(servlet, mapping));
-            }
-        }
+        initialized = true;
     }
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
@@ -251,6 +237,16 @@ public class ServletContextImpl implements ServletContext {
                     servletRegistration.setInitParameter(webInitParam.name(), webInitParam.value());
                 }
             }
+        }
+        try {
+            servlet.init(servletRegistration.servletConfig);
+        } catch (ServletException e) {
+            throw new RuntimeException(e);
+        }
+        nameToServletMap.put(servletName, servlet);
+        Collection<String> mappings = servletRegistration.getMappings();
+        for (String mapping : mappings) {
+            servletMappings.add(new ServletMapping(servlet, mapping));
         }
         return servletRegistration;
     }
