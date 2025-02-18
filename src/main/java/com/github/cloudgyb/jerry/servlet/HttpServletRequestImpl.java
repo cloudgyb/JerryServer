@@ -18,7 +18,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     private static final String NO_CHECK_AUTH_TYPE = "no-check";
     private final HttpExchange httpExchange;
     private final Headers requestHeaders;
-    private final ServletContext servletContext;
+    private final ServletContextImpl servletContext;
     private final ServletInputStream servletInputStream;
     private String authType = NO_CHECK_AUTH_TYPE;
     private Cookie[] cookies;
@@ -26,10 +26,11 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     private final Map<String, String[]> parameterMap;
     private final Map<String, Object> attributeMap;
     private final boolean isSecure;
-    private DispatcherType dispatcherType = DispatcherType.REQUEST;
+    private final DispatcherType dispatcherType = DispatcherType.REQUEST;
     private String characterEncoding;
+    private String jsessionid = null;
 
-    public HttpServletRequestImpl(HttpExchange httpExchange, ServletContext servletContext) {
+    public HttpServletRequestImpl(HttpExchange httpExchange, ServletContextImpl servletContext) {
         this.httpExchange = httpExchange;
         this.requestHeaders = httpExchange.getRequestHeaders();
         this.servletInputStream = new ServletInputStreamImpl(httpExchange.getRequestBody());
@@ -39,6 +40,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
         this.requestId = UUID.randomUUID().toString();
         this.isSecure = false;
         parseParameters();
+        parseCookies();
     }
 
     private void parseParameters() {
@@ -90,14 +92,15 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public Cookie[] getCookies() {
-        if (cookies == null) {
-            parseCookies();
-        }
         return cookies;
     }
 
     private void parseCookies() {
         List<String> cookieHeaders = this.requestHeaders.get("Cookie");
+        if (cookieHeaders == null) {
+            cookies = new Cookie[0];
+            return;
+        }
         ArrayList<Cookie> cookieList = new ArrayList<>();
         for (String cookieHeader : cookieHeaders) {
             cookieHeader = cookieHeader.trim();
@@ -108,7 +111,16 @@ public class HttpServletRequestImpl implements HttpServletRequest {
             for (String s : split) {
                 s = s.trim();
                 String[] split1 = s.split("=");
-                cookieList.add(new Cookie(split1[0], split1[1]));
+                String cookieName = split1[0];
+                String cookieValue = split1[1];
+                if (servletContext.sessionManager.SESSION_ID_KEY.equals(cookieName)) {
+                    jsessionid = cookieValue;
+                    HttpSessionImpl session = servletContext.sessionManager.getSession(jsessionid);
+                    if (session != null) {
+                        session.changeToOld();
+                    }
+                }
+                cookieList.add(new Cookie(cookieName, cookieValue));
             }
         }
         cookies = cookieList.toArray(new Cookie[0]);
@@ -217,13 +229,29 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     @Override
-    public HttpSession getSession(boolean b) {
-        return null;
+    public HttpSession getSession(boolean create) {
+        if (create) {
+            return createSession();
+        }
+        if (jsessionid == null) {
+            return null;
+        }
+        return servletContext.sessionManager.getSession(jsessionid);
     }
 
     @Override
     public HttpSession getSession() {
-        return null;
+        HttpSession session = getSession(false);
+        if (session == null) {
+            session = createSession();
+        }
+        return session;
+    }
+
+    private HttpSessionImpl createSession() {
+        HttpSessionImpl session = servletContext.sessionManager.createSession(servletContext);
+        jsessionid = session.getId();
+        return session;
     }
 
     @Override

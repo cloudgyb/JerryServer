@@ -31,6 +31,7 @@ public class ServletContextImpl implements ServletContext {
     private String responseCharacterEncoding;
     boolean initialized = false;
     private int sessionTimeout = DEFAULT_SESSION_TIMEOUT;
+    final HttpSessionManager sessionManager;
 
     public ServletContextImpl(String contextPath) {
         this.contextPath = contextPath;
@@ -40,6 +41,7 @@ public class ServletContextImpl implements ServletContext {
         this.requestCharacterEncoding = StandardCharsets.UTF_8.toString();
         this.responseCharacterEncoding = StandardCharsets.UTF_8.toString();
         this.servletMappings = new ArrayList<>();
+        this.sessionManager = new HttpSessionManager();
     }
 
     public ServletContextImpl(String contextPath, int sessionTimeout) {
@@ -62,27 +64,35 @@ public class ServletContextImpl implements ServletContext {
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
         String requestURI = request.getRequestURI();
-        Servlet servlet = null;
-        for (ServletMapping servletMapping : servletMappings) {
-            boolean match = servletMapping.match(requestURI);
-            if (match) {
-                servlet = servletMapping.servlet;
-                break;
+        try {
+            Servlet servlet = null;
+            for (ServletMapping servletMapping : servletMappings) {
+                boolean match = servletMapping.match(requestURI);
+                if (match) {
+                    servlet = servletMapping.servlet;
+                    break;
+                }
             }
-        }
-        if (servlet != null) {
-            try {
-                servlet.service(request, response);
-            } catch (ServletException | IOException e) {
-                throw new RuntimeException(e);
+            if (servlet != null) {
+                try {
+                    servlet.service(request, response);
+                } catch (ServletException | IOException e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                String resBody404 = "404 NOT FOUND!";
+                try {
+                    response.sendError(404, resBody404);
+                    response.getOutputStream().close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        } else {
-            String resBody404 = "404 NOT FOUND!";
+        } finally {
             try {
-                response.sendError(404, resBody404);
                 response.getOutputStream().close();
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                System.err.println(e.getMessage());
             }
         }
     }

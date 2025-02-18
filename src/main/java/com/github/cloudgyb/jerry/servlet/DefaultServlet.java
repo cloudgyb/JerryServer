@@ -4,8 +4,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * @author cloudgyb
@@ -14,9 +16,13 @@ import java.io.IOException;
 public class DefaultServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String resBody404 = "404 NOT FOUND!";
+        String resBody = "Welcome to JerryServer!<br/>The Server is Running!";
+        HttpSession session = req.getSession();
+        session.setAttribute("test","123");
         try {
-            resp.sendError(404, resBody404);
+            resp.setContentType("text/html");
+            resp.setContentLength(resBody.getBytes(StandardCharsets.UTF_8).length);
+            resp.getWriter().println(resBody);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

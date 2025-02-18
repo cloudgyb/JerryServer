@@ -20,7 +20,7 @@ public class JerryHttpHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) {
         HttpServletRequestImpl httpServletRequest = new HttpServletRequestImpl(exchange, servletContext);
-        HttpServletResponseImpl httpServletResponse = new HttpServletResponseImpl(exchange);
+        HttpServletResponseImpl httpServletResponse = new HttpServletResponseImpl(exchange, httpServletRequest);
         servletContext.process(httpServletRequest, httpServletResponse);
     }
 }

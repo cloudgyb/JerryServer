@@ -6,6 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -21,6 +22,7 @@ import java.util.Locale;
 public class HttpServletResponseImpl implements HttpServletResponse {
     boolean isCommit = false;
     private final HttpExchange httpExchange;
+    private final HttpServletRequestImpl requestImpl;
     private final Headers responseHeaders;
     private int statusCode = HttpServletResponse.SC_OK;
     private String characterEncoding = "utf-8";
@@ -29,8 +31,9 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     private final ServletOutputStream outputStream;
     private Locale locale = Locale.getDefault();
 
-    public HttpServletResponseImpl(HttpExchange httpExchange) {
+    public HttpServletResponseImpl(HttpExchange httpExchange, HttpServletRequestImpl requestImpl) {
         this.httpExchange = httpExchange;
+        this.requestImpl = requestImpl;
         this.responseHeaders = httpExchange.getResponseHeaders();
         this.outputStream = new ServletOutputStreamImpl(this.httpExchange, this);
     }
@@ -50,6 +53,15 @@ public class HttpServletResponseImpl implements HttpServletResponse {
             }
             if (contentType != null) {
                 responseHeaders.set("Content-Type", contentType);
+            }
+            HttpSession session = requestImpl.getSession(false);
+            if (session != null && session.isNew()) {
+                ServletContextImpl servletContext = (ServletContextImpl) requestImpl.getServletContext();
+                Cookie sessionCookie = new Cookie(servletContext.sessionManager.SESSION_ID_KEY, session.getId());
+                sessionCookie.setPath(servletContext.getContextPath());
+                sessionCookie.setDomain(requestImpl.getServerName());
+                sessionCookie.setHttpOnly(true);
+                addCookie(sessionCookie);
             }
             httpExchange.sendResponseHeaders(statusCode, CL);
             isCommit = true;
@@ -90,6 +102,8 @@ public class HttpServletResponseImpl implements HttpServletResponse {
         commit();
         httpExchange.getResponseBody().write(bytes);
         httpExchange.getResponseBody().flush();
+        httpExchange.getResponseBody().close();
+        httpExchange.close();
     }
 
     @Override

@@ -11,14 +11,17 @@ import java.util.*;
  */
 public class HttpSessionImpl implements HttpSession {
     private final ServletContext servletContext;
+    private final HttpSessionManager sessionManager;
     private final long creationTime;
     private long lastAccessedTime;
     private final String id;
     private boolean isNew = true;
     private final Map<String, Object> attributes;
     private int maxInactiveInterval = -1;
+    private boolean invalidated = false;
 
-    public HttpSessionImpl(ServletContext servletContext) {
+    public HttpSessionImpl(HttpSessionManager sessionManager, ServletContext servletContext) {
+        this.sessionManager = sessionManager;
         this.servletContext = servletContext;
         this.attributes = new HashMap<>();
         this.id = UUID.randomUUID().toString().replace("-", "");
@@ -82,15 +85,20 @@ public class HttpSessionImpl implements HttpSession {
 
     @Override
     public void invalidate() {
+        invalidated = true;
         attributes.clear();
+        sessionManager.removeSession(getId());
     }
 
     @Override
     public boolean isNew() {
+        if (invalidated) {
+            throw new IllegalStateException("The session is invalidated!");
+        }
         return isNew;
     }
 
-    void changeOld() {
+    void changeToOld() {
         isNew = false;
     }
 }
