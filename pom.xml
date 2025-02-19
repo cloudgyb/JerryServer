@@ -31,34 +31,6 @@
       <version>3.8.1</version>
       <scope>test</scope>
     </dependency>
-
-      <dependency>
-          <groupId>com.tongweb.springboot</groupId>
-          <artifactId>tongweb-spring-boot-starter-2.x</artifactId>
-          <version>7.0.E.5_P4</version>
-      </dependency>
-
-      <dependency>
-          <groupId>com.tongweb</groupId>
-          <artifactId>tongweb-embed</artifactId>
-          <version>7.0.E.5_P4</version>
-      </dependency>
-
-      <dependency>
-          <groupId>com.tongweb</groupId>
-          <artifactId>tongweb-embed</artifactId>
-          <version>7.0.E.5_P4</version>
-      </dependency>
-      <dependency>
-          <groupId>com.tongweb.springboot</groupId>
-          <artifactId>tongweb-spring-boot-starter-2.x</artifactId>
-          <version>7.0.E.5_P4</version>
-      </dependency>
-      <dependency>
-          <groupId>com.tongweb.springboot</groupId>
-          <artifactId>tongweb-spring-boot-websocket-2.x</artifactId>
-          <version>7.0.E.5_P4</version>
-      </dependency>
   </dependencies>
     <build>
         <plugins>
