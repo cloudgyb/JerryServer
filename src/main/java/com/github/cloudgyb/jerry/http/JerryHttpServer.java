@@ -1,6 +1,7 @@
 package com.github.cloudgyb.jerry.http;
 
 import com.github.cloudgyb.jerry.servlet.DefaultServlet;
+import com.github.cloudgyb.jerry.servlet.HelloServlet;
 import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ServletRegistration;
@@ -21,6 +22,8 @@ public class JerryHttpServer {
         ServletContextImpl servletContext = new ServletContextImpl(contextPath);
         ServletRegistration.Dynamic dynamic = servletContext.addServlet("default", DefaultServlet.class);
         dynamic.addMapping("/");
+
+        servletContext.addServlet("/hello", HelloServlet.class);
 
         JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(8888);

@@ -63,7 +63,7 @@ public class ServletContextImpl implements ServletContext {
     }
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
-        String requestURI = request.getRequestURI();
+        String requestURI = request.getRequestURL().toString();
         try {
             Servlet servlet = null;
             for (ServletMapping servletMapping : servletMappings) {
@@ -241,6 +241,10 @@ public class ServletContextImpl implements ServletContext {
             if (strings != null) {
                 servletRegistration.addMapping(strings);
             }
+            strings = annotation.value();
+            if (strings != null) {
+                servletRegistration.addMapping(strings);
+            }
             WebInitParam[] webInitParams = annotation.initParams();
             if (webInitParams != null) {
                 for (WebInitParam webInitParam : webInitParams) {
@@ -257,6 +261,9 @@ public class ServletContextImpl implements ServletContext {
         Collection<String> mappings = servletRegistration.getMappings();
         for (String mapping : mappings) {
             servletMappings.add(new ServletMapping(servlet, mapping));
+        }
+        if (!mappings.isEmpty()) {
+            Collections.sort(servletMappings);
         }
         return servletRegistration;
     }
@@ -424,5 +431,10 @@ public class ServletContextImpl implements ServletContext {
             throw new IllegalStateException("Servlet Context initialized");
         }
         responseCharacterEncoding = encoding;
+    }
+
+    void addServletMappings(Servlet servlet, String urlPattern) {
+        servletMappings.add(new ServletMapping(servlet, urlPattern));
+        Collections.sort(servletMappings);
     }
 }

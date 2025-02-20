@@ -26,7 +26,7 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
     public Set<String> addMapping(String... urlPatterns) {
         mappings.addAll(Arrays.asList(urlPatterns));
         for (String urlPattern : urlPatterns) {
-            servletContext.servletMappings.add(new ServletMapping(servlet, urlPattern));
+            servletContext.addServletMappings(servlet, urlPattern);
         }
         return Set.of();
     }
