@@ -212,7 +212,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public String getRequestURI() {
-        return httpExchange.getRequestURI().toString();
+        return httpExchange.getRequestURI().getPath();
     }
 
     @Override

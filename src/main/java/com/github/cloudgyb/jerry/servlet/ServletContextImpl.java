@@ -63,7 +63,7 @@ public class ServletContextImpl implements ServletContext {
     }
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
-        String requestURI = request.getRequestURL().toString();
+        String requestURI = request.getRequestURI();
         try {
             Servlet servlet = null;
             for (ServletMapping servletMapping : servletMappings) {
@@ -258,13 +258,6 @@ public class ServletContextImpl implements ServletContext {
             throw new RuntimeException(e);
         }
         nameToServletMap.put(servletName, servlet);
-        Collection<String> mappings = servletRegistration.getMappings();
-        for (String mapping : mappings) {
-            servletMappings.add(new ServletMapping(servlet, mapping));
-        }
-        if (!mappings.isEmpty()) {
-            Collections.sort(servletMappings);
-        }
         return servletRegistration;
     }
 
