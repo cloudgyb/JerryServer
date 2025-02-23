@@ -9,7 +9,6 @@ import jakarta.servlet.ServletRegistration;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 /**
@@ -30,10 +29,14 @@ public class JerryHttpServer {
         JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(8888);
         HttpServer httpServer = HttpServer.create(inetSocketAddress, 512);
-        Executor executor = httpServer.getExecutor();
-        System.out.println(executor);
         httpServer.setExecutor(Executors.newSingleThreadExecutor());
         httpServer.createContext(contextPath, jerryHttpHandler);
         httpServer.start();
+        System.out.printf("JerryServer is running! It listen at %s:%d%n",
+                inetSocketAddress.getHostString(), inetSocketAddress.getPort());
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("stopping");
+            httpServer.stop(5);
+        }));
     }
 }
