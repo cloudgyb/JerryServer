@@ -3,6 +3,7 @@ package com.github.cloudgyb.jerry.http;
 import com.github.cloudgyb.jerry.servlet.DefaultServlet;
 import com.github.cloudgyb.jerry.servlet.HelloServlet;
 import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
+import com.github.cloudgyb.jerry.servlet.filter.TestFilter;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ServletRegistration;
 
@@ -24,6 +25,7 @@ public class JerryHttpServer {
         dynamic.addMapping("/");
 
         servletContext.addServlet("/hello", HelloServlet.class);
+        servletContext.addFilter("/*", TestFilter.class);
 
         JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(8888);
