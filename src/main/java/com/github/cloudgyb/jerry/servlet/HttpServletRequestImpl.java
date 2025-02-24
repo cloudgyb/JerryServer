@@ -1,9 +1,12 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.github.cloudgyb.jerry.servlet.multipart.PartImpl;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
+import org.apache.commons.fileupload2.core.*;
+import org.apache.commons.fileupload2.jakarta.servlet6.JakartaServletFileUpload;
 
 import java.io.*;
 import java.nio.charset.Charset;
@@ -29,6 +32,8 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     private final DispatcherType dispatcherType = DispatcherType.REQUEST;
     private String characterEncoding;
     private String jsessionid = null;
+    // multipart
+    private List<Part> parts = null;
 
     public HttpServletRequestImpl(HttpExchange httpExchange, ServletContextImpl servletContext) {
         this.httpExchange = httpExchange;
@@ -41,6 +46,20 @@ public class HttpServletRequestImpl implements HttpServletRequest {
         this.isSecure = false;
         parseParameters();
         parseCookies();
+        boolean isMultipart = JakartaServletFileUpload.isMultipartContent(this);
+        if (isMultipart) {
+            parts = new ArrayList<>();
+            JakartaServletFileUpload<DiskFileItem, DiskFileItemFactory> uploadParser = new JakartaServletFileUpload<>();
+            uploadParser.setFileItemFactory( new DiskFileItemFactory.Builder().get());
+            try {
+                List<DiskFileItem> diskFileItems = uploadParser.parseRequest(this);
+                for (DiskFileItem diskFileItem : diskFileItems) {
+                    parts.add(new PartImpl(diskFileItem));
+                }
+            } catch (FileUploadException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private void parseParameters() {
@@ -291,19 +310,10 @@ public class HttpServletRequestImpl implements HttpServletRequest {
 
     @Override
     public Collection<Part> getParts() throws IOException, ServletException {
-        String requestMethod = httpExchange.getRequestMethod();
-        if (!"POST".equals(requestMethod)) {
+        if (parts == null) {
             return Collections.emptyList();
         }
-        String contentType = requestHeaders.getFirst("Content-Type");
-        if (contentType == null) {
-            return Collections.emptyList();
-        }
-        if (contentType.startsWith("multipart/form-data")) {
-            InputStream requestBody = httpExchange.getRequestBody();
-
-        }
-        return Collections.emptyList();
+        return parts;
     }
 
     @Override
