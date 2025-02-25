@@ -13,9 +13,9 @@ public class HttpSessionImpl implements HttpSession {
     private final ServletContext servletContext;
     private final HttpSessionManager sessionManager;
     private final long creationTime;
-    private long lastAccessedTime;
+    private volatile long lastAccessedTime;
     private final String id;
-    private boolean isNew = true;
+    private volatile boolean isNew = true;
     private final Map<String, Object> attributes;
     private int maxInactiveInterval = -1;
     private boolean invalidated = false;

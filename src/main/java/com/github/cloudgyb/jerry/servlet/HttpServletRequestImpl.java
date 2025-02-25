@@ -136,6 +136,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
                     jsessionid = cookieValue;
                     HttpSessionImpl session = servletContext.sessionManager.getSession(jsessionid);
                     if (session != null) {
+                        session.setLastAccessedTime(System.currentTimeMillis());
                         session.changeToOld();
                     }
                 }

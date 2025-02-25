@@ -2,6 +2,9 @@ package com.github.cloudgyb.jerry.servlet;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author geng
@@ -10,10 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HttpSessionManager implements Runnable {
     String SESSION_ID_KEY = "jsessionid";
     private final Map<String, HttpSessionImpl> sessionMap;
+    private final ScheduledExecutorService sessionTimeoutCheckThread;
 
     public HttpSessionManager() {
         this.sessionMap = new ConcurrentHashMap<>();
-        new Thread(this).start();
+        this.sessionTimeoutCheckThread = Executors.newSingleThreadScheduledExecutor();
+        this.sessionTimeoutCheckThread.scheduleAtFixedRate(this, 2, 2, TimeUnit.SECONDS);
     }
 
     public HttpSessionImpl getSession(String id) {
@@ -32,6 +37,7 @@ public class HttpSessionManager implements Runnable {
 
     @Override
     public void run() {
+        System.out.println("Check Session timeout.");
         for (HttpSessionImpl session : sessionMap.values()) {
             int maxInactiveInterval = session.getMaxInactiveInterval();
             if (maxInactiveInterval == -1) {
@@ -42,6 +48,23 @@ public class HttpSessionManager implements Runnable {
             if (currentTime - lastAccessedTime > maxInactiveInterval * 1000L) {
                 session.invalidate();
             }
+        }
+    }
+
+    public void destroy() {
+        sessionTimeoutCheckThread.shutdown();
+        try {
+            boolean b = sessionTimeoutCheckThread.awaitTermination(2, TimeUnit.SECONDS);
+            if (b) {
+                System.out.println("SessionTimeoutCheckThread terminated!");
+            } else {
+                sessionTimeoutCheckThread.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        for (HttpSessionImpl session : sessionMap.values()) {
+            session.invalidate();
         }
     }
 }

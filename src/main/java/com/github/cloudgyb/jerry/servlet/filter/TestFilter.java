@@ -18,6 +18,6 @@ public class TestFilter extends HttpFilter {
     @Override
     protected void doFilter(HttpServletRequest req, HttpServletResponse res, FilterChain chain) throws IOException, ServletException {
         System.out.println("TestFilter...");
-        //super.doFilter(req, res, chain);
+        super.doFilter(req, res, chain);
     }
 }
