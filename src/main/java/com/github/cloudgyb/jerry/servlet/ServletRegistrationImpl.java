@@ -14,6 +14,7 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
     final Servlet servlet;
     final ServletConfigImpl servletConfig;
     private final ServletContextImpl servletContext;
+    int loadOnStartup = -1;
 
     public ServletRegistrationImpl(String servletName, Servlet servlet, ServletContextImpl servletContext) {
         this.servletName = servletName;
@@ -24,6 +25,13 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
 
     @Override
     public Set<String> addMapping(String... urlPatterns) {
+        if (urlPatterns == null || urlPatterns.length == 0) {
+            throw new IllegalArgumentException("urlPatterns cannot be empty!");
+        }
+        if (servletContext.initialized) {
+            throw new IllegalStateException("The ServletContext from which this ServletRegistration " +
+                    "was obtained has already been initialized!");
+        }
         mappings.addAll(Arrays.asList(urlPatterns));
         for (String urlPattern : urlPatterns) {
             servletContext.addServletMappings(servlet, urlPattern);
@@ -80,7 +88,7 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
 
     @Override
     public void setLoadOnStartup(int loadOnStartup) {
-
+        this.loadOnStartup = loadOnStartup;
     }
 
     @Override
