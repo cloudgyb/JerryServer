@@ -33,7 +33,7 @@ public class ServletContextImpl implements ServletContext {
     // Servlet info store
     final List<ServletMapping> servletMappings;
     private final Map<String, Servlet> nameToServletMap;
-    private final Map<String, ServletRegistration> nameToServletRegistrationMap;
+    private final Map<String, ServletRegistrationImpl> nameToServletRegistrationMap;
     // Filter info store
     final List<FilterMapping> filterMappings;
     private final Map<String, Filter> nameToFilterMap;
@@ -67,16 +67,28 @@ public class ServletContextImpl implements ServletContext {
         this.sessionTimeout = sessionTimeout;
     }
 
-    public void init(Set<Class<? extends Servlet>> servletClasses) {
-        for (Class<? extends Servlet> servletClass : servletClasses) {
-            WebServlet annotation = servletClass.getAnnotation(WebServlet.class);
-            if (annotation == null) {
-                continue;
+    public void init() {
+        // For servlet init
+        Collection<ServletRegistrationImpl> values = nameToServletRegistrationMap.values();
+        ArrayList<ServletRegistrationImpl> servletRegistrations = new ArrayList<>(values);
+        // Sort by loadOnStartup
+        Collections.sort(servletRegistrations);
+        // servlet init
+        for (ServletRegistrationImpl servletRegistration : servletRegistrations) {
+            Servlet servlet = servletRegistration.servlet;
+            int loadOnStartup = servletRegistration.loadOnStartup;
+            if (loadOnStartup >= 0) {
+                ServletConfigImpl servletConfig = servletRegistration.servletConfig;
+                try {
+                    servlet.init(servletConfig);
+                } catch (ServletException e) {
+                    throw new RuntimeException(e);
+                }
             }
-            String servletName = annotation.name() == null || annotation.name().isEmpty() ?
-                    servletClass.getSimpleName() : annotation.name();
-            addServlet(servletName, servletClass);
         }
+        // Sort the servletMappings
+        Collections.sort(servletMappings);
+
         initialized = true;
     }
 
@@ -298,11 +310,6 @@ public class ServletContextImpl implements ServletContext {
                 }
             }
         }
-        try {
-            servlet.init(servletRegistration.servletConfig);
-        } catch (ServletException e) {
-            throw new RuntimeException(e);
-        }
         nameToServletMap.put(servletName, servlet);
         return servletRegistration;
     }
@@ -340,7 +347,7 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public Map<String, ? extends ServletRegistration> getServletRegistrations() {
-        return nameToServletRegistrationMap;
+        return new HashMap<>(nameToServletRegistrationMap);
     }
 
     @SuppressWarnings("unchecked")
@@ -383,11 +390,6 @@ public class ServletContextImpl implements ServletContext {
                 filterRegistration.setInitParameter(webInitParam.name(), webInitParam.value());
             }
         }
-        try {
-            filter.init(filterRegistration.getFilterConfig());
-        } catch (ServletException e) {
-            throw new RuntimeException(e);
-        }
         nameToFilterMap.put(filterName, filter);
 
         return filterRegistration;
@@ -414,12 +416,12 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public FilterRegistration getFilterRegistration(String filterName) {
-        return null;
+        return nameToFilterRegistrationMap.get(filterName);
     }
 
     @Override
     public Map<String, ? extends FilterRegistration> getFilterRegistrations() {
-        return Map.of();
+        return new HashMap<>(nameToFilterRegistrationMap);
     }
 
     @Override
@@ -490,7 +492,7 @@ public class ServletContextImpl implements ServletContext {
     @Override
     public void setSessionTimeout(int sessionTimeout) {
         if (initialized) {
-            throw new IllegalStateException("Servlet Context initialized");
+            throw new IllegalStateException("The ServletContext has already been initialized!");
         }
         this.sessionTimeout = sessionTimeout;
     }
@@ -503,7 +505,7 @@ public class ServletContextImpl implements ServletContext {
     @Override
     public void setRequestCharacterEncoding(String encoding) {
         if (initialized) {
-            throw new IllegalStateException("Servlet Context initialized");
+            throw new IllegalStateException("The ServletContext has already been initialized!");
         }
         requestCharacterEncoding = encoding;
     }
@@ -539,5 +541,9 @@ public class ServletContextImpl implements ServletContext {
         for (String urlPattern : urlPatterns) {
             filterMappings.add(new FilterMapping(filter, urlPattern));
         }
+    }
+
+    public boolean isInitialized() {
+        return initialized;
     }
 }

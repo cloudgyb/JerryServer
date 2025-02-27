@@ -41,6 +41,13 @@ public class FilterRegistrationImpl implements FilterRegistration.Dynamic {
 
     @Override
     public void addMappingForUrlPatterns(EnumSet<DispatcherType> dispatcherTypes, boolean isMatchAfter, String... urlPattern) {
+        if (urlPattern == null || urlPattern.length == 0) {
+            throw new IllegalArgumentException("urlPattern cannot be empty!");
+        }
+        if (servletContext.isInitialized()) {
+            throw new IllegalStateException("The ServletContext from which this FilterRegistration was obtained " +
+                    "has already been initialized!");
+        }
         urlPatterns.addAll(Arrays.asList(urlPattern));
         servletContext.addFilterMapping(urlPattern, filter);
     }

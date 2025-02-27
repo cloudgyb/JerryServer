@@ -8,7 +8,7 @@ import java.util.*;
  * @author cloudgyb
  * @since 2025/2/16 10:57
  */
-public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
+public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Comparable<ServletRegistrationImpl> {
     private final Set<String> mappings = new HashSet<>();
     private final String servletName;
     final Servlet servlet;
@@ -109,5 +109,10 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic {
     @Override
     public void setAsyncSupported(boolean isAsyncSupported) {
 
+    }
+
+    @Override
+    public int compareTo(ServletRegistrationImpl o) {
+        return Integer.compare(this.loadOnStartup, o.loadOnStartup);
     }
 }
