@@ -19,6 +19,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -48,7 +49,7 @@ public class ServletContextImpl implements ServletContext {
 
     public ServletContextImpl(String contextPath) {
         this.contextPath = contextPath;
-        this.attributes = new HashMap<>();
+        this.attributes = new ConcurrentHashMap<>();
         this.servletMappings = new ArrayList<>();
         this.nameToServletMap = new HashMap<>();
         this.nameToServletRegistrationMap = new HashMap<>();
