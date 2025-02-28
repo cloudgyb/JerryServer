@@ -1,9 +1,11 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.github.cloudgyb.jerry.ServerInfo;
 import com.github.cloudgyb.jerry.servlet.filter.FilterChainImpl;
 import com.github.cloudgyb.jerry.servlet.filter.FilterMapping;
 import com.github.cloudgyb.jerry.servlet.filter.FilterRegistrationImpl;
 import jakarta.servlet.*;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.annotation.WebInitParam;
 import jakarta.servlet.annotation.WebServlet;
@@ -46,6 +48,9 @@ public class ServletContextImpl implements ServletContext {
     private int sessionTimeout = DEFAULT_SESSION_TIMEOUT;
     // session manager
     final HttpSessionManager sessionManager;
+    // init params
+    private final Map<String, String> initParams;
+    String webApplicationDisplayName = null;
 
     public ServletContextImpl(String contextPath) {
         this.contextPath = contextPath;
@@ -60,6 +65,7 @@ public class ServletContextImpl implements ServletContext {
         this.requestCharacterEncoding = StandardCharsets.UTF_8.toString();
         this.responseCharacterEncoding = StandardCharsets.UTF_8.toString();
         this.sessionManager = new HttpSessionManager();
+        this.initParams = new HashMap<>();
     }
 
     public ServletContextImpl(String contextPath, int sessionTimeout) {
@@ -231,22 +237,33 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public String getServerInfo() {
-        return "";
+        return ServerInfo.serverNameAndVersion;
     }
 
     @Override
     public String getInitParameter(String name) {
-        return "";
+        if (name == null) {
+            throw new NullPointerException("The name argument cannot be null!");
+        }
+        return initParams.get(name);
     }
 
     @Override
     public Enumeration<String> getInitParameterNames() {
-        return null;
+        HashSet<String> strings = new HashSet<>(initParams.keySet());
+        return Collections.enumeration(strings);
     }
 
     @Override
     public boolean setInitParameter(String name, String value) {
-        return false;
+        if (initialized) {
+            throw new IllegalStateException("The ServletContext has already been initialized!");
+        }
+        if (name == null) {
+            throw new NullPointerException("The name argument cannot be null!");
+        }
+        String s = initParams.putIfAbsent(name, value);
+        return s == null;
     }
 
     @Override
@@ -271,7 +288,7 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public String getServletContextName() {
-        return "";
+        return webApplicationDisplayName;
     }
 
     @SuppressWarnings("unchecked")
@@ -293,22 +310,35 @@ public class ServletContextImpl implements ServletContext {
         ServletRegistrationImpl servletRegistration =
                 new ServletRegistrationImpl(servletName, servlet, this);
         nameToServletRegistrationMap.put(servletName, servletRegistration);
-        WebServlet annotation = servlet.getClass().getAnnotation(WebServlet.class);
+        Class<? extends Servlet> servletClass = servlet.getClass();
+        WebServlet annotation = servletClass.getAnnotation(WebServlet.class);
         if (annotation != null) {
-            String[] strings = annotation.urlPatterns();
-            if (strings != null) {
-                servletRegistration.addMapping(strings);
+            // urlPattern
+            String[] urlPatterns = annotation.urlPatterns();
+            if (urlPatterns != null && urlPatterns.length > 0) {
+                servletRegistration.addMapping(urlPatterns);
             }
-            strings = annotation.value();
-            if (strings != null) {
-                servletRegistration.addMapping(strings);
+            urlPatterns = annotation.value();
+            if (urlPatterns != null && urlPatterns.length > 0) {
+                servletRegistration.addMapping(urlPatterns);
             }
+            // initParams
             WebInitParam[] webInitParams = annotation.initParams();
             if (webInitParams != null) {
                 for (WebInitParam webInitParam : webInitParams) {
                     servletRegistration.setInitParameter(webInitParam.name(), webInitParam.value());
                 }
             }
+            // Is async supported?
+            boolean isAsyncSupported = annotation.asyncSupported();
+            servletRegistration.setAsyncSupported(isAsyncSupported);
+        }
+        // multipart config
+        MultipartConfig multipartConfigAnn = servletClass.getAnnotation(MultipartConfig.class);
+        if (multipartConfigAnn != null) {
+            MultipartConfigElement multipartConfig = new MultipartConfigElement(multipartConfigAnn.location(), multipartConfigAnn.maxFileSize(),
+                    multipartConfigAnn.maxRequestSize(), multipartConfigAnn.fileSizeThreshold());
+            servletRegistration.setMultipartConfig(multipartConfig);
         }
         nameToServletMap.put(servletName, servlet);
         return servletRegistration;
@@ -521,11 +551,6 @@ public class ServletContextImpl implements ServletContext {
             throw new IllegalStateException("Servlet Context initialized");
         }
         responseCharacterEncoding = encoding;
-    }
-
-    void addServletMappings(Servlet servlet, String urlPattern) {
-        servletMappings.add(new ServletMapping(servlet, urlPattern));
-        Collections.sort(servletMappings);
     }
 
     public void addFilterMappingForServletName(String[] servletNames, Filter filter) {

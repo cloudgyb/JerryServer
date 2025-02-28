@@ -9,12 +9,15 @@ import java.util.*;
  * @since 2025/2/16 10:57
  */
 public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Comparable<ServletRegistrationImpl> {
+    private static final Set<String> mappedUrlPatterns = new HashSet<>();
     private final Set<String> mappings = new HashSet<>();
     private final String servletName;
     final Servlet servlet;
     final ServletConfigImpl servletConfig;
     private final ServletContextImpl servletContext;
     int loadOnStartup = -1;
+    MultipartConfigElement multipartConfigElement;
+    boolean asyncSupported = false;
 
     public ServletRegistrationImpl(String servletName, Servlet servlet, ServletContextImpl servletContext) {
         this.servletName = servletName;
@@ -32,11 +35,18 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Com
             throw new IllegalStateException("The ServletContext from which this ServletRegistration " +
                     "was obtained has already been initialized!");
         }
-        mappings.addAll(Arrays.asList(urlPatterns));
+        HashSet<String> mappedUrlPatternSet = new HashSet<>();
         for (String urlPattern : urlPatterns) {
-            servletContext.addServletMappings(servlet, urlPattern);
+            boolean added = mappedUrlPatterns.add(urlPattern);
+            if (added) {
+                mappings.add(urlPattern);
+            } else {
+                if (!mappings.contains(urlPattern)) {
+                    mappedUrlPatternSet.add(urlPattern);
+                }
+            }
         }
-        return Set.of();
+        return mappedUrlPatternSet;
     }
 
     @Override
@@ -98,7 +108,14 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Com
 
     @Override
     public void setMultipartConfig(MultipartConfigElement multipartConfig) {
-
+        if (multipartConfig == null) {
+            throw new IllegalStateException("multipartConfig cannot be null!");
+        }
+        if (servletContext.initialized) {
+            throw new IllegalStateException("The ServletContext from which this ServletRegistration was obtained " +
+                    "has already been initialized");
+        }
+        multipartConfigElement = multipartConfig;
     }
 
     @Override
@@ -108,7 +125,11 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Com
 
     @Override
     public void setAsyncSupported(boolean isAsyncSupported) {
-
+        if (servletContext.initialized) {
+            throw new IllegalStateException("The ServletContext from which this dynamic Registration was obtained " +
+                    "has already been initialized!");
+        }
+        asyncSupported = isAsyncSupported;
     }
 
     @Override
