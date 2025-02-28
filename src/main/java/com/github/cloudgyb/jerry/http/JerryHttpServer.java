@@ -6,6 +6,7 @@ import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import com.github.cloudgyb.jerry.servlet.filter.TestFilter;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRegistration;
 
 import java.io.IOException;
@@ -59,8 +60,13 @@ public class JerryHttpServer {
         ServletRegistration.Dynamic dynamic = servletContext.addServlet("default", DefaultServlet.class);
         dynamic.addMapping("/");
 
-        servletContext.addServlet("/hello", HelloServlet.class);
-        servletContext.addFilter("/*", TestFilter.class);
+        servletContext.addServlet("HelloServlet", HelloServlet.class);
+        servletContext.addFilter("TestFilter", TestFilter.class);
+        try {
+            servletContext.init();
+        } catch (ServletException e) {
+            throw new RuntimeException(e);
+        }
         return servletContext;
     }
 

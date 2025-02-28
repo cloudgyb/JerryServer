@@ -1,7 +1,9 @@
 package com.github.cloudgyb.jerry.servlet;
 
 import com.github.cloudgyb.jerry.ServerInfo;
+import com.github.cloudgyb.jerry.http.MimeTypes;
 import com.github.cloudgyb.jerry.servlet.filter.FilterChainImpl;
+import com.github.cloudgyb.jerry.servlet.filter.FilterConfigImpl;
 import com.github.cloudgyb.jerry.servlet.filter.FilterMapping;
 import com.github.cloudgyb.jerry.servlet.filter.FilterRegistrationImpl;
 import jakarta.servlet.*;
@@ -12,6 +14,8 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.descriptor.JspConfigDescriptor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,12 +29,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
+ * Servlet Context 实现类
+ *
  * @author geng
  * @since 2025/02/12 16:26:56
  */
 public class ServletContextImpl implements ServletContext {
     private final static int DEFAULT_SESSION_TIMEOUT = 24 * 3600; // one day
     private final String contextPath;
+    private final Logger logger;
     private final Map<String, Object> attributes;
     // Servlet info store
     final List<ServletMapping> servletMappings;
@@ -39,7 +46,7 @@ public class ServletContextImpl implements ServletContext {
     // Filter info store
     final List<FilterMapping> filterMappings;
     private final Map<String, Filter> nameToFilterMap;
-    private final Map<String, FilterRegistration> nameToFilterRegistrationMap;
+    private final Map<String, FilterRegistrationImpl> nameToFilterRegistrationMap;
     private final Map<String, Set<Filter>> servletNameToFilterMap;
     // Encoding
     private String requestCharacterEncoding;
@@ -66,6 +73,7 @@ public class ServletContextImpl implements ServletContext {
         this.responseCharacterEncoding = StandardCharsets.UTF_8.toString();
         this.sessionManager = new HttpSessionManager();
         this.initParams = new HashMap<>();
+        this.logger = LoggerFactory.getLogger(contextPath);
     }
 
     public ServletContextImpl(String contextPath, int sessionTimeout) {
@@ -73,8 +81,8 @@ public class ServletContextImpl implements ServletContext {
         this.sessionTimeout = sessionTimeout;
     }
 
-    public void init() {
-        // For servlet init
+    public void init() throws ServletException {
+        // 1. For servlet init
         Collection<ServletRegistrationImpl> values = nameToServletRegistrationMap.values();
         ArrayList<ServletRegistrationImpl> servletRegistrations = new ArrayList<>(values);
         // Sort by loadOnStartup
@@ -84,18 +92,33 @@ public class ServletContextImpl implements ServletContext {
             Servlet servlet = servletRegistration.servlet;
             int loadOnStartup = servletRegistration.loadOnStartup;
             if (loadOnStartup >= 0) {
-                ServletConfigImpl servletConfig = servletRegistration.servletConfig;
-                try {
-                    servlet.init(servletConfig);
-                } catch (ServletException e) {
-                    throw new RuntimeException(e);
-                }
+                initServlet(servletRegistration, servlet);
             }
         }
         // Sort the servletMappings
         Collections.sort(servletMappings);
 
+        //2. For Filter init
+        Collection<FilterRegistrationImpl> filterRegistrations = nameToFilterRegistrationMap.values();
+        for (FilterRegistrationImpl filterRegistration : filterRegistrations) {
+            FilterConfigImpl filterConfig = filterRegistration.getFilterConfig();
+            Filter filter = filterRegistration.getFilter();
+            filter.init(filterConfig);
+        }
+        // Sort the filterMappings
+        Collections.sort(filterMappings);
+
         initialized = true;
+    }
+
+    private static void initServlet(ServletRegistrationImpl servletRegistration, Servlet servlet) {
+        ServletConfigImpl servletConfig = servletRegistration.servletConfig;
+        try {
+            servlet.init(servletConfig);
+            servletRegistration.initialized = true;
+        } catch (ServletException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
@@ -117,6 +140,10 @@ public class ServletContextImpl implements ServletContext {
                     return;
                 }
                 try {
+                    ServletRegistrationImpl servletRegistration = nameToServletRegistrationMap.get(servletName);
+                    if (!servletRegistration.initialized) {
+                        initServlet(servletRegistration, servlet);
+                    }
                     servlet.service(request, response);
                 } catch (ServletException | IOException e) {
                     throw new RuntimeException(e);
@@ -192,7 +219,18 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public String getMimeType(String file) {
-        return "";
+        if (file == null) {
+            return null;
+        }
+        int period = file.lastIndexOf('.');
+        if (period < 0) {
+            return null;
+        }
+        String extension = file.substring(period + 1);
+        if (extension.isEmpty()) {
+            return null;
+        }
+        return MimeTypes.get(extension);
     }
 
     @Override
@@ -222,12 +260,16 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public void log(String msg) {
-
+        if (logger.isInfoEnabled()) {
+            logger.info(msg);
+        }
     }
 
     @Override
     public void log(String message, Throwable throwable) {
-
+        if (logger.isErrorEnabled()) {
+            logger.error(message, throwable);
+        }
     }
 
     @Override
@@ -408,9 +450,17 @@ public class ServletContextImpl implements ServletContext {
         WebFilter webFilterAnnotation = filter.getClass().getAnnotation(WebFilter.class);
         if (webFilterAnnotation != null) {
             String[] urlPattern = webFilterAnnotation.value();
-            filterRegistration.addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), false, urlPattern);
+            if (urlPattern != null && urlPattern.length != 0) {
+                filterRegistration.addMappingForUrlPatterns(
+                        EnumSet.of(DispatcherType.REQUEST), false, urlPattern
+                );
+            }
             urlPattern = webFilterAnnotation.urlPatterns();
-            filterRegistration.addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), false, urlPattern);
+            if (urlPattern != null && urlPattern.length != 0) {
+                filterRegistration.addMappingForUrlPatterns(
+                        EnumSet.of(DispatcherType.REQUEST), false, urlPattern
+                );
+            }
 
             String[] servletNames = webFilterAnnotation.servletNames();
             filterRegistration.addMappingForServletNames(EnumSet.of(DispatcherType.REQUEST), false, servletNames);

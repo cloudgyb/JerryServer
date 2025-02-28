@@ -101,4 +101,8 @@ public class FilterRegistrationImpl implements FilterRegistration.Dynamic {
     public FilterConfigImpl getFilterConfig() {
         return filterConfig;
     }
+
+    public Filter getFilter() {
+        return filter;
+    }
 }

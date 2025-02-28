@@ -18,6 +18,7 @@ public class ServletRegistrationImpl implements ServletRegistration.Dynamic, Com
     int loadOnStartup = -1;
     MultipartConfigElement multipartConfigElement;
     boolean asyncSupported = false;
+    boolean initialized = false;
 
     public ServletRegistrationImpl(String servletName, Servlet servlet, ServletContextImpl servletContext) {
         this.servletName = servletName;
