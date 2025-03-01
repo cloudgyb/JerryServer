@@ -41,9 +41,8 @@ public class Jerry {
     public static void main(String[] args) throws IOException {
         JerryHttpServer jerryHttpServer = new JerryHttpServer(8888);
         jerryHttpServer.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("stopping");
-            jerryHttpServer.stop();
-        }));
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(jerryHttpServer::stop)
+        );
     }
 }

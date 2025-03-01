@@ -8,6 +8,8 @@ import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRegistration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -16,11 +18,14 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
+ * Http Server 实现类
+ *
  * @author cloudgyb
  * @since 2025/2/10 20:45
  */
 public class JerryHttpServer {
     private static final String defaultContextPath = "/";
+    private final Logger logger = LoggerFactory.getLogger(getClass());
     private final InetSocketAddress address;
     private final HttpServer httpServer;
     private final Map<String, ServletContextImpl> servletContextMap = new HashMap<>();
@@ -45,18 +50,22 @@ public class JerryHttpServer {
         httpServer.setExecutor(Executors.newSingleThreadExecutor());
         httpServer.createContext(servletContext.getContextPath(), jerryHttpHandler);
         httpServer.start();
-        System.out.printf("JerryServer is running! It listen at %s:%d%n",
-                address.getHostString(), address.getPort());
+        if (logger.isInfoEnabled()) {
+            logger.info("The JerryServer is running! It is listening at {}:{}",
+                    address.getHostString(), address.getPort());
+        }
     }
 
     public void stop() {
         httpServer.stop(2);
         servletContextMap.clear();
-        System.out.println("JerryServer is stopped!");
+        if (logger.isInfoEnabled()) {
+            logger.info("The JerryServer is stopped!");
+        }
     }
 
     private static ServletContextImpl createDefaultServletContext() {
-        ServletContextImpl servletContext = new ServletContextImpl(defaultContextPath);
+        ServletContextImpl servletContext = new ServletContextImpl(defaultContextPath, 5);
         ServletRegistration.Dynamic dynamic = servletContext.addServlet("default", DefaultServlet.class);
         dynamic.addMapping("/");
 
