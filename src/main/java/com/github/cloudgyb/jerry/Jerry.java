@@ -3,6 +3,7 @@ package com.github.cloudgyb.jerry;
 import com.github.cloudgyb.jerry.http.JerryHttpServer;
 
 import java.io.IOException;
+import java.io.InputStream;
 //@formatter:off
 /**
  * Jerry的主类，负责启动HTTP服务器
@@ -39,6 +40,13 @@ import java.io.IOException;
 //@formatter:on
 public class Jerry {
     public static void main(String[] args) throws IOException {
+        try (InputStream in = Jerry.class.getClassLoader().getResourceAsStream("banner_tiny.txt")) {
+            assert in != null;
+            byte[] bytes = in.readAllBytes();
+            System.out.println(new String(bytes));
+        } catch (Exception ignore) {
+        }
+
         JerryHttpServer jerryHttpServer = new JerryHttpServer(8888);
         jerryHttpServer.start();
         Runtime.getRuntime().addShutdownHook(
