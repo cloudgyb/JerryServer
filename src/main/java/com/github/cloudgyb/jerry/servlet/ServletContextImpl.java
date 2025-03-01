@@ -94,6 +94,11 @@ public class ServletContextImpl implements ServletContext {
             if (loadOnStartup >= 0) {
                 initServlet(servletRegistration, servlet);
             }
+            // add mappings to servletMappings
+            Collection<String> mappings = servletRegistration.getMappings();
+            for (String mapping : mappings) {
+                servletMappings.add(new ServletMapping(servletRegistration, servlet, mapping));
+            }
         }
         // Sort the servletMappings
         Collections.sort(servletMappings);
@@ -125,22 +130,23 @@ public class ServletContextImpl implements ServletContext {
         String requestURI = request.getRequestURI();
         try {
             Servlet servlet = null;
+            ServletRegistrationImpl servletRegistration = null;
             for (ServletMapping servletMapping : servletMappings) {
                 boolean match = servletMapping.match(requestURI);
                 if (match) {
                     servlet = servletMapping.servlet;
+                    servletRegistration = servletMapping.servletRegistration;
                     break;
                 }
             }
             if (servlet != null) {
-                String servletName = servlet.getServletConfig().getServletName();
+                String servletName = servletRegistration.getName();
                 FilterChainImpl filterChain = createFilterChain(servletName, requestURI);
                 filterChain.doFilter(request, response);
                 if (!filterChain.isPassed()) {
                     return;
                 }
                 try {
-                    ServletRegistrationImpl servletRegistration = nameToServletRegistrationMap.get(servletName);
                     if (!servletRegistration.initialized) {
                         initServlet(servletRegistration, servlet);
                     }
@@ -157,7 +163,7 @@ public class ServletContextImpl implements ServletContext {
                     throw new RuntimeException(e);
                 }
             }
-        } catch (ServletException | IOException e) {
+        } catch (Throwable e) {
             throw new RuntimeException(e);
         } finally {
             try {

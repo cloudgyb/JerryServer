@@ -9,14 +9,16 @@ import jakarta.servlet.Servlet;
  */
 public class ServletMapping extends AbstractMapping implements Comparable<AbstractMapping> {
     final Servlet servlet;
+    final ServletRegistrationImpl servletRegistration;
 
-    public ServletMapping(Servlet servlet, String urlPattern) {
+    public ServletMapping(ServletRegistrationImpl servletRegistration, Servlet servlet, String urlPattern) {
         super(urlPattern);
+        this.servletRegistration = servletRegistration;
         this.servlet = servlet;
     }
 
     public String getServletName() {
-        return servlet.getServletConfig().getServletName();
+        return servletRegistration.getName();
     }
 
 }
