@@ -40,7 +40,7 @@ public class HttpSessionManager implements Runnable {
         System.out.println("Check Session timeout.");
         for (HttpSessionImpl session : sessionMap.values()) {
             int maxInactiveInterval = session.getMaxInactiveInterval();
-            if (maxInactiveInterval == -1) {
+            if (maxInactiveInterval <= 0) { // 永不过时
                 return;
             }
             long lastAccessedTime = session.getLastAccessedTime();

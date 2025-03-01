@@ -17,7 +17,7 @@ public class HttpSessionImpl implements HttpSession {
     private final String id;
     private volatile boolean isNew = true;
     private final Map<String, Object> attributes;
-    private int maxInactiveInterval = -1;
+    private volatile int maxInactiveInterval;
     private boolean invalidated = false;
 
     public HttpSessionImpl(HttpSessionManager sessionManager, ServletContext servletContext) {
@@ -27,6 +27,7 @@ public class HttpSessionImpl implements HttpSession {
         this.id = UUID.randomUUID().toString().replace("-", "");
         this.creationTime = System.currentTimeMillis();
         this.lastAccessedTime = this.creationTime;
+        this.maxInactiveInterval = servletContext.getSessionTimeout() * 60;
     }
 
     @Override
