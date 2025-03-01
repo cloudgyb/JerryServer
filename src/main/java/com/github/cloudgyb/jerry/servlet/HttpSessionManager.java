@@ -1,23 +1,34 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import jakarta.annotation.Nonnull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
+ * 会话管理器
+ *
  * @author geng
  * @since 2025/02/18 13:59:19
  */
 public class HttpSessionManager implements Runnable {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
     String SESSION_ID_KEY = "jsessionid";
     private final Map<String, HttpSessionImpl> sessionMap;
     private final ScheduledExecutorService sessionTimeoutCheckThread;
 
     public HttpSessionManager() {
         this.sessionMap = new ConcurrentHashMap<>();
-        this.sessionTimeoutCheckThread = Executors.newSingleThreadScheduledExecutor();
+        this.sessionTimeoutCheckThread = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
+            int count = 0;
+
+            @Override
+            public Thread newThread(@Nonnull Runnable r) {
+                return new Thread(r, "HttpSessionManagerThread-" + count++);
+            }
+        });
         this.sessionTimeoutCheckThread.scheduleAtFixedRate(this, 2, 2, TimeUnit.SECONDS);
     }
 
@@ -37,7 +48,9 @@ public class HttpSessionManager implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("Check Session timeout.");
+        if (logger.isDebugEnabled()) {
+            logger.debug("Checking timeout sessions.");
+        }
         for (HttpSessionImpl session : sessionMap.values()) {
             int maxInactiveInterval = session.getMaxInactiveInterval();
             if (maxInactiveInterval <= 0) { // 永不过时
@@ -47,6 +60,9 @@ public class HttpSessionManager implements Runnable {
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastAccessedTime > maxInactiveInterval * 1000L) {
                 session.invalidate();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Clearing timeout session(id:{})", session.getId());
+                }
             }
         }
     }

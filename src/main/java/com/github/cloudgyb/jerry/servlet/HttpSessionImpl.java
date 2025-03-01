@@ -4,14 +4,15 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author geng
  * @since 2025/02/12 14:38:45
  */
 public class HttpSessionImpl implements HttpSession {
-    private final ServletContext servletContext;
-    private final HttpSessionManager sessionManager;
+    private ServletContext servletContext;
+    private HttpSessionManager sessionManager;
     private final long creationTime;
     private volatile long lastAccessedTime;
     private final String id;
@@ -23,7 +24,7 @@ public class HttpSessionImpl implements HttpSession {
     public HttpSessionImpl(HttpSessionManager sessionManager, ServletContext servletContext) {
         this.sessionManager = sessionManager;
         this.servletContext = servletContext;
-        this.attributes = new HashMap<>();
+        this.attributes = new ConcurrentHashMap<>();
         this.id = UUID.randomUUID().toString().replace("-", "");
         this.creationTime = System.currentTimeMillis();
         this.lastAccessedTime = this.creationTime;
@@ -89,6 +90,8 @@ public class HttpSessionImpl implements HttpSession {
         invalidated = true;
         attributes.clear();
         sessionManager.removeSession(getId());
+        sessionManager = null;
+        servletContext = null;
     }
 
     @Override
