@@ -1,5 +1,6 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.github.cloudgyb.jerry.ServerInfo;
 import com.github.cloudgyb.jerry.util.DateUtil;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -42,6 +43,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
         if (isCommit)
             return;
         try {
+            responseHeaders.set("Server", ServerInfo.serverNameAndVersion);
             long CL = contentLength;
             String contentLen = responseHeaders.getFirst("Content-Length");
             if (contentLen != null && !contentLen.isEmpty()) {
