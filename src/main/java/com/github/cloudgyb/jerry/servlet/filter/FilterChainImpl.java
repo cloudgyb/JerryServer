@@ -14,27 +14,22 @@ import java.util.List;
  * @since 2025/2/23 14:07
  */
 public class FilterChainImpl implements FilterChain {
-    private final List<Filter> filters;
-    private int index = -1;
+    private final Filter[] filters;
+    private int index = 0;
+    private final Servlet servlet;
 
-    public FilterChainImpl(List<Filter> filterList) {
-        filters = new ArrayList<>();
-        filters.addAll(filterList);
+    public FilterChainImpl(Filter[] filters, Servlet servlet) {
+        this.filters = filters;
+        this.servlet = servlet;
     }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException {
-        index++;
-        if (index >= filters.size()) {
+        if (index < filters.length) {
+            Filter filter = filters[index++];
+            filter.doFilter(request, response, this);
             return;
         }
-
-        Filter filter = filters.get(index);
-        filter.doFilter(request, response, this);
+        servlet.service(request, response);
     }
-
-    public boolean isPassed() {
-        return index >= filters.size();
-    }
-
 }

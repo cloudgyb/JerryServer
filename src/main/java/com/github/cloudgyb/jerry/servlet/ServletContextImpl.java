@@ -140,20 +140,12 @@ public class ServletContextImpl implements ServletContext {
                 }
             }
             if (servlet != null) {
+                if (!servletRegistration.initialized) {
+                    initServlet(servletRegistration, servlet);
+                }
                 String servletName = servletRegistration.getName();
                 FilterChainImpl filterChain = createFilterChain(servletName, requestURI);
                 filterChain.doFilter(request, response);
-                if (!filterChain.isPassed()) {
-                    return;
-                }
-                try {
-                    if (!servletRegistration.initialized) {
-                        initServlet(servletRegistration, servlet);
-                    }
-                    servlet.service(request, response);
-                } catch (ServletException | IOException e) {
-                    throw new RuntimeException(e);
-                }
             } else {
                 String resBody404 = "404 NOT FOUND!";
                 try {
@@ -190,7 +182,7 @@ public class ServletContextImpl implements ServletContext {
         }
         ArrayList<Filter> objects = new ArrayList<>(filters);
         objects.addAll(matchedFilterMappings.stream().map(FilterMapping::getFilter).collect(Collectors.toList()));
-        return new FilterChainImpl(objects);
+        return new FilterChainImpl(objects.toArray(new Filter[0]), nameToServletMap.get(servletName));
     }
 
     @Override
