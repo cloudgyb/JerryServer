@@ -15,28 +15,34 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
+ * Standard implement for HttpServletResponse interface
+ *
  * @author cloudgyb
  * @since 2025/2/12 21:52
  */
 public class HttpServletResponseImpl implements HttpServletResponse {
+    private final static String DEFAULT_CHARACTER_ENCODING = "ISO-8859-1";
     boolean isCommit = false;
     private final HttpExchange httpExchange;
     private final HttpServletRequestImpl requestImpl;
     private final Headers responseHeaders;
     private int statusCode = HttpServletResponse.SC_OK;
-    private String characterEncoding = "utf-8";
+    private String characterEncoding;
     private String contentType = null;
     private long contentLength = -1;
     private final ServletOutputStream outputStream;
     private Locale locale = Locale.getDefault();
+    private byte outputMethodIsCalled = 0;
 
     public HttpServletResponseImpl(HttpExchange httpExchange, HttpServletRequestImpl requestImpl) {
         this.httpExchange = httpExchange;
         this.requestImpl = requestImpl;
         this.responseHeaders = httpExchange.getResponseHeaders();
         this.outputStream = new ServletOutputStreamImpl(this.httpExchange, this);
+        this.characterEncoding = requestImpl.getServletContext().getResponseCharacterEncoding();
     }
 
     void commit() {
@@ -222,7 +228,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public String getCharacterEncoding() {
-        return characterEncoding;
+        return Objects.requireNonNullElse(characterEncoding, DEFAULT_CHARACTER_ENCODING);
     }
 
     @Override
@@ -232,16 +238,27 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public ServletOutputStream getOutputStream() {
+        if (outputMethodIsCalled != 0 && outputMethodIsCalled != 1) {
+            throw new IllegalStateException("getWriter() has already been called!");
+        }
+        outputMethodIsCalled = 1;
         return outputStream;
     }
 
     @Override
     public PrintWriter getWriter() {
+        if (outputMethodIsCalled != 0 && outputMethodIsCalled != 2) {
+            throw new IllegalStateException("getOutputStream() has already been called!");
+        }
+        outputMethodIsCalled = 2;
         return new PrintWriter(outputStream, true, Charset.forName(getCharacterEncoding()));
     }
 
     @Override
     public void setCharacterEncoding(String encoding) {
+        if (isCommit || outputMethodIsCalled == 2) { //Return if the response has already been committed or getWriter has been called.
+            return;
+        }
         characterEncoding = encoding;
     }
 
@@ -265,9 +282,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void setBufferSize(int size) {
-        if (isCommit) {
-            throw new IllegalStateException("The response is commited!");
-        }
+        checkIfCommitted();
         throw new UnsupportedOperationException();
     }
 
@@ -286,8 +301,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void resetBuffer() {
-        if (isCommit)
-            throw new IllegalStateException();
+        checkIfCommitted();
         throw new UnsupportedOperationException();
     }
 
@@ -298,7 +312,10 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void reset() {
-
+        checkIfCommitted();
+        statusCode = 200;
+        outputMethodIsCalled = 0;
+        responseHeaders.clear();
     }
 
     @Override
@@ -312,5 +329,11 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     @Override
     public Locale getLocale() {
         return locale;
+    }
+
+    private void checkIfCommitted() {
+        if (isCommit) {
+            throw new IllegalStateException("The response has already been committed!");
+        }
     }
 }
