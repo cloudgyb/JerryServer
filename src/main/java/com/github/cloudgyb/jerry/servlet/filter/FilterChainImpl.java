@@ -3,9 +3,6 @@ package com.github.cloudgyb.jerry.servlet.filter;
 import jakarta.servlet.*;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * FilterChain 简单实现
