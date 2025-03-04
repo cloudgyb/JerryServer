@@ -1,5 +1,6 @@
 package com.github.cloudgyb.jerry.http;
 
+import com.github.cloudgyb.jerry.loader.WebAppClassLoader;
 import com.github.cloudgyb.jerry.servlet.DefaultServlet;
 import com.github.cloudgyb.jerry.servlet.HelloServlet;
 import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
@@ -13,6 +14,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -65,7 +68,10 @@ public class JerryHttpServer {
     }
 
     private static ServletContextImpl createDefaultServletContext() {
-        ServletContextImpl servletContext = new ServletContextImpl(defaultContextPath, 5);
+        Path classesPath = Paths.get("./webapp/WEB-INF/classes/");
+        Path libPath = Paths.get("./webapp/WEB-INF/lib/");
+        WebAppClassLoader webAppClassLoader = new WebAppClassLoader(classesPath, libPath);
+        ServletContextImpl servletContext = new ServletContextImpl(defaultContextPath, webAppClassLoader);
         ServletRegistration.Dynamic dynamic = servletContext.addServlet("default", DefaultServlet.class);
         dynamic.addMapping("/");
 

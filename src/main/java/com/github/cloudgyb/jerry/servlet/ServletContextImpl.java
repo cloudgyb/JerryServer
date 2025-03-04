@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
  * @since 2025/02/12 16:26:56
  */
 public class ServletContextImpl implements ServletContext {
+    private final static String DEFAULT_ENCODING = StandardCharsets.UTF_8.name();
     private final static int DEFAULT_SESSION_TIMEOUT = 24 * 3600; // one day
     private final String contextPath;
     private final Logger logger;
@@ -52,15 +53,43 @@ public class ServletContextImpl implements ServletContext {
     private String requestCharacterEncoding;
     private String responseCharacterEncoding;
     boolean initialized = false;
-    private int sessionTimeout = DEFAULT_SESSION_TIMEOUT;
+    private int sessionTimeout;
     // session manager
     final HttpSessionManager sessionManager;
     // init params
     private final Map<String, String> initParams;
-    String webApplicationDisplayName = null;
+    String webApplicationDisplayName;
+    private final ClassLoader classLoader;
 
-    public ServletContextImpl(String contextPath) {
+    public ServletContextImpl(String contextPath, ClassLoader classLoader) {
+        this(contextPath, classLoader, DEFAULT_SESSION_TIMEOUT,
+                DEFAULT_ENCODING, DEFAULT_ENCODING, null);
+    }
+
+    public ServletContextImpl(String contextPath, ClassLoader classLoader, int sessionTimeout) {
+        this(contextPath, classLoader, sessionTimeout,
+                DEFAULT_ENCODING, DEFAULT_ENCODING, null);
+
+    }
+
+    public ServletContextImpl(String contextPath, ClassLoader classLoader,
+                              int sessionTimeout,
+                              String requestCharacterEncoding, String responseCharacterEncoding,
+                              String webApplicationDisplayName) {
+        if (contextPath == null || contextPath.isEmpty()) {
+            throw new IllegalArgumentException("contextPath cannot be null or empty!");
+        }
+        if (classLoader == null) {
+            throw new IllegalArgumentException("classLoader cannot be null!");
+        }
+        if (requestCharacterEncoding == null || requestCharacterEncoding.isBlank()) {
+            throw new IllegalArgumentException("requestCharacterEncoding cannot be null or blank!");
+        }
+        if (responseCharacterEncoding == null || responseCharacterEncoding.isBlank()) {
+            throw new IllegalArgumentException("responseCharacterEncoding cannot be null or blank!");
+        }
         this.contextPath = contextPath;
+        this.classLoader = classLoader;
         this.attributes = new ConcurrentHashMap<>();
         this.servletMappings = new ArrayList<>();
         this.nameToServletMap = new HashMap<>();
@@ -69,16 +98,13 @@ public class ServletContextImpl implements ServletContext {
         this.nameToFilterMap = new HashMap<>();
         this.nameToFilterRegistrationMap = new HashMap<>();
         this.servletNameToFilterMap = new HashMap<>();
-        this.requestCharacterEncoding = StandardCharsets.UTF_8.toString();
-        this.responseCharacterEncoding = StandardCharsets.UTF_8.toString();
+        this.requestCharacterEncoding = requestCharacterEncoding;
+        this.responseCharacterEncoding = responseCharacterEncoding;
         this.sessionManager = new HttpSessionManager();
         this.initParams = new HashMap<>();
-        this.logger = LoggerFactory.getLogger(contextPath);
-    }
-
-    public ServletContextImpl(String contextPath, int sessionTimeout) {
-        this(contextPath);
         this.sessionTimeout = sessionTimeout;
+        this.webApplicationDisplayName = webApplicationDisplayName;
+        this.logger = LoggerFactory.getLogger(contextPath);
     }
 
     public void init() throws ServletException {
@@ -549,7 +575,20 @@ public class ServletContextImpl implements ServletContext {
 
     @Override
     public ClassLoader getClassLoader() {
-        return null;
+        if (System.getSecurityManager() != null) {
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            ClassLoader parent = classLoader;
+            while (parent != null) {
+                if (parent == tccl) {
+                    break;
+                }
+                parent = parent.getParent();
+            }
+            if (parent == null) {
+                System.getSecurityManager().checkPermission(new RuntimePermission("getClassLoader"));
+            }
+        }
+        return classLoader;
     }
 
     @Override
