@@ -3,6 +3,7 @@ package com.github.cloudgyb.jerry.http;
 import com.github.cloudgyb.jerry.loader.WebAppClassLoader;
 import com.github.cloudgyb.jerry.servlet.DefaultServlet;
 import com.github.cloudgyb.jerry.servlet.HelloServlet;
+import com.github.cloudgyb.jerry.servlet.ServletContextFactory;
 import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import com.github.cloudgyb.jerry.servlet.filter.TestFilter;
 import com.sun.net.httpserver.HttpServer;
@@ -12,13 +13,17 @@ import jakarta.servlet.ServletRegistration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.jar.JarFile;
 
 /**
  * Http Server 实现类
@@ -28,7 +33,7 @@ import java.util.concurrent.Executors;
  */
 public class JerryHttpServer {
     private static final String defaultContextPath = "/";
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private static final Logger logger = LoggerFactory.getLogger(JerryHttpServer.class);
     private final InetSocketAddress address;
     private final HttpServer httpServer;
     private final Map<String, ServletContextImpl> servletContextMap = new HashMap<>();
@@ -47,7 +52,7 @@ public class JerryHttpServer {
     }
 
     public void start() {
-        ServletContextImpl servletContext = createDefaultServletContext();
+        ServletContextImpl servletContext = ServletContextFactory.create(Paths.get(""));
         servletContextMap.put(servletContext.getContextPath(), servletContext);
         JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         httpServer.setExecutor(Executors.newSingleThreadExecutor());
@@ -65,24 +70,6 @@ public class JerryHttpServer {
         if (logger.isInfoEnabled()) {
             logger.info("The JerryServer is stopped!");
         }
-    }
-
-    private static ServletContextImpl createDefaultServletContext() {
-        Path classesPath = Paths.get("./webapp/WEB-INF/classes/");
-        Path libPath = Paths.get("./webapp/WEB-INF/lib/");
-        WebAppClassLoader webAppClassLoader = new WebAppClassLoader(classesPath, libPath);
-        ServletContextImpl servletContext = new ServletContextImpl(defaultContextPath, webAppClassLoader);
-        ServletRegistration.Dynamic dynamic = servletContext.addServlet("default", DefaultServlet.class);
-        dynamic.addMapping("/");
-
-        servletContext.addServlet("HelloServlet", HelloServlet.class);
-        servletContext.addFilter("TestFilter", TestFilter.class);
-        try {
-            servletContext.init();
-        } catch (ServletException e) {
-            throw new RuntimeException(e);
-        }
-        return servletContext;
     }
 
     public ServletContext getServletContext(String contextPath) {
