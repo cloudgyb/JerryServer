@@ -154,6 +154,10 @@ public class ServletContextImpl implements ServletContext {
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
         String requestURI = request.getRequestURI();
+        requestURI = requestURI.replaceFirst(contextPath, "");
+        if (requestURI.isEmpty()) {
+            requestURI = "/";
+        }
         try {
             Servlet servlet = null;
             ServletRegistrationImpl servletRegistration = null;

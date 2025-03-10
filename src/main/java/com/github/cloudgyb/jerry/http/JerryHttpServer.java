@@ -52,7 +52,12 @@ public class JerryHttpServer {
     }
 
     public void start() {
-        ServletContextImpl servletContext = ServletContextFactory.create(Paths.get(""));
+        ServletContextImpl servletContext;
+        try {
+            servletContext = ServletContextFactory.create(Paths.get("D:\\IdeaProjects\\TestServlet\\target\\Test.war"));
+        } catch (ServletException e) {
+            throw new RuntimeException(e);
+        }
         servletContextMap.put(servletContext.getContextPath(), servletContext);
         JerryHttpHandler jerryHttpHandler = new JerryHttpHandler(servletContext);
         httpServer.setExecutor(Executors.newSingleThreadExecutor());
