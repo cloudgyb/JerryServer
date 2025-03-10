@@ -45,7 +45,7 @@ public class WebAppClassLoader extends URLClassLoader {
                 return urls.toArray(new URL[0]);
             }
             try (Stream<Path> list = Files.list(libPath)) {
-                list.filter(f -> f.endsWith(".jar")).sorted().forEach(f1 -> {
+                list.filter(f -> f.getFileName().toString().endsWith(".jar")).sorted().forEach(f1 -> {
                     if (Files.isRegularFile(f1)) {
                         String path = f1.toAbsolutePath().normalize().toString().replace('\\', '/');
                         URL url;
