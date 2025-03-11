@@ -1,17 +1,17 @@
 package com.github.cloudgyb.jerry.servlet;
 
 import com.github.cloudgyb.jerry.loader.WebAppClassLoader;
+import com.github.cloudgyb.jerry.util.ServletComponentUtil;
 import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebFilter;
-import jakarta.servlet.annotation.WebServlet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.*;
+import java.util.EventListener;
 import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
@@ -44,10 +44,6 @@ public class ServletContextFactory {
         if (classesPath == null) {
             throw new IllegalArgumentException("classesPath cannot be null!");
         }
-        // libPath can be null
-        /*if (libPath == null) {
-            throw new IllegalArgumentException("libPath cannot be null!");
-        }*/
         WebAppClassLoader webAppClassLoader = new WebAppClassLoader(classesPath, libPath);
         ServletContextImpl servletContext = new ServletContextImpl(contextPath, webAppClassLoader);
         scanAndRegisterServletComponents(servletContext, classesPath, libPath);
@@ -65,84 +61,6 @@ public class ServletContextFactory {
         }
         return servletContext;
     }
-
-    @SuppressWarnings("unchecked")
-    private static void scanAndRegisterServletComponents(ServletContextImpl servletContext,
-                                                         Path classesPath, Path libPath) {
-        scanClasspath(servletContext, classesPath);
-        boolean libPathExists = Files.exists(libPath);
-        if (!libPathExists) {
-            logger.warn("libPath not exists: {}, skip to scan!", libPath);
-            return;
-        }
-        try (Stream<Path> list = Files.list(libPath)) {
-            list.forEach(f -> {
-                if (!f.endsWith(".jar")) {
-                    return;
-                }
-                try (JarFile jarFile = new JarFile(f.toFile())) {
-                    jarFile.stream().forEach(jarEntry -> {
-                        if (!jarEntry.getName().endsWith(".class")) {
-                            return;
-                        }
-                        String className = jarEntry.getName().replace('/', '.');
-                        ClassLoader classLoader = servletContext.getClassLoader();
-                        try {
-                            Class<?> aClass = classLoader.loadClass(className);
-                            if (Servlet.class.isAssignableFrom(aClass) && aClass.isAnnotationPresent(WebServlet.class)) {
-                                logger.debug("Found Servlet from jar:{}", aClass.getName());
-                                servletContext.addServlet(aClass.getSimpleName(), (Class<Servlet>) aClass);
-                            } else if (Filter.class.isAssignableFrom(aClass) && aClass.isAnnotationPresent(WebFilter.class)) {
-                                logger.debug("Found Filter from jar:{}", aClass.getName());
-                                servletContext.addFilter(aClass.getSimpleName(), (Class<Filter>) aClass);
-                            }
-                        } catch (ClassNotFoundException e) {
-                            logger.warn("Failed to load class: {}", className, e);
-                        }
-                    });
-                } catch (IOException e) {
-                    logger.warn("Failed to load jar file: {}, skipped!", f.getFileName(), e);
-                }
-            });
-        } catch (IOException e) {
-            logger.warn("Failed to list jar files in lib path: {}", libPath, e);
-        }
-    }
-
-    private static void scanClasspath(ServletContextImpl servletContext, Path klass) {
-        if (!Files.isDirectory(klass)) {
-            String fileName = klass.toAbsolutePath().normalize().toString().replace('\\','/');
-            if (fileName.endsWith(".class")) {
-                int i = fileName.indexOf("WEB-INF/classes/");
-                String replace = fileName.substring(i + "WEB-INF/classes/".length()).replace(".class", "");
-                String className = replace.replace('/', '.');
-                ClassLoader classLoader = servletContext.getClassLoader();
-                Class<?> aClass;
-                try {
-                    aClass = classLoader.loadClass(className);
-                    if (Servlet.class.isAssignableFrom(aClass) && aClass.isAnnotationPresent(WebServlet.class)) {
-                        logger.debug("Found Servlet from classpath:{}", aClass.getName());
-                        servletContext.addServlet(aClass.getSimpleName(), (Class<Servlet>) aClass);
-                    }
-                    if (Filter.class.isAssignableFrom(aClass) && aClass.isAnnotationPresent(WebFilter.class)) {
-                        logger.debug("Found Filter from classpath:{}", aClass.getName());
-                        servletContext.addFilter(aClass.getSimpleName(), (Class<Filter>) aClass);
-                    }
-                } catch (ClassNotFoundException e) {
-                    logger.warn("Failed to load class: {}", className, e);
-                }
-            }
-            return;
-        }
-        try (Stream<Path> list = Files.list(klass)) {
-            list.forEach(f -> {
-                scanClasspath(servletContext, f);
-            });
-        } catch (IOException e) {
-            logger.warn("Failed to load classes from classpath: {}", klass, e);
-        }
-    }
-
 
     /**
      * Create a ServletContext by war file.
@@ -179,6 +97,80 @@ public class ServletContextFactory {
             contextPath = "/" + contextPath;
         }
         return create(contextPath, classesPath, libPath);
+    }
+
+    private static void scanAndRegisterServletComponents(ServletContextImpl servletContext,
+                                                         Path classesPath, Path libPath) {
+        scanClasspath(servletContext, classesPath);
+        boolean libPathExists = Files.exists(libPath);
+        if (!libPathExists) {
+            logger.warn("libPath not exists: {}, skip to scan!", libPath);
+            return;
+        }
+        try (Stream<Path> list = Files.list(libPath)) {
+            list.forEach(f -> {
+                if (!f.endsWith(".jar")) {
+                    return;
+                }
+                try (JarFile jarFile = new JarFile(f.toFile())) {
+                    jarFile.stream().forEach(jarEntry -> {
+                        if (!jarEntry.getName().endsWith(".class")) {
+                            return;
+                        }
+                        String className = jarEntry.getName().replace('/', '.');
+                        try {
+                            loadClassAndRegister(servletContext, className, "jar");
+                        } catch (ClassNotFoundException e) {
+                            logger.warn("Failed to load class: {}", className, e);
+                        }
+                    });
+                } catch (IOException e) {
+                    logger.warn("Failed to load jar file: {}, skipped!", f.getFileName(), e);
+                }
+            });
+        } catch (IOException e) {
+            logger.warn("Failed to list jar files in lib path: {}", libPath, e);
+        }
+    }
+
+    private static void scanClasspath(ServletContextImpl servletContext, Path klass) {
+        if (!Files.isDirectory(klass)) {
+            String fileName = klass.toAbsolutePath().normalize().toString().replace('\\', '/');
+            if (fileName.endsWith(".class")) {
+                int i = fileName.indexOf("WEB-INF/classes/");
+                String replace = fileName.substring(i + "WEB-INF/classes/".length()).replace(".class", "");
+                String className = replace.replace('/', '.');
+                try {
+                    loadClassAndRegister(servletContext, className, "classpath");
+                } catch (ClassNotFoundException e) {
+                    logger.warn("Failed to load class: {}", className, e);
+                }
+            }
+            return;
+        }
+        try (Stream<Path> list = Files.list(klass)) {
+            list.forEach(f -> scanClasspath(servletContext, f));
+        } catch (IOException e) {
+            logger.warn("Failed to load classes from classpath: {}", klass, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void loadClassAndRegister(ServletContextImpl servletContext, String className, String classFrom)
+            throws ClassNotFoundException {
+        ClassLoader classLoader = servletContext.getClassLoader();
+        Class<?> aClass;
+        aClass = classLoader.loadClass(className);
+        if (ServletComponentUtil.isServletClass(aClass)) {
+            logger.debug("Found Servlet from {}:{}", classFrom, aClass.getName());
+            servletContext.addServlet(aClass.getSimpleName(), (Class<Servlet>) aClass);
+        } else if (ServletComponentUtil.isFilterClass(aClass)) {
+            logger.debug("Found Filter from {}:{}", classFrom, aClass.getName());
+            servletContext.addFilter(aClass.getSimpleName(), (Class<Filter>) aClass);
+        } else if (ServletComponentUtil.isWebListenerClass(aClass)) {
+            logger.debug("Found Listener from {}:{}", classFrom, aClass.getName());
+            servletContext.addListener((Class<? extends EventListener>) aClass);
+        }
     }
 
     private static void extractWarFile(Path warPath, Path unzipTargetPath) throws IOException {
