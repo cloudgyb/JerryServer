@@ -12,8 +12,7 @@ import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.annotation.WebInitParam;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.descriptor.JspConfigDescriptor;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +48,13 @@ public class ServletContextImpl implements ServletContext {
     private final Map<String, Filter> nameToFilterMap;
     private final Map<String, FilterRegistrationImpl> nameToFilterRegistrationMap;
     private final Map<String, Set<Filter>> servletNameToFilterMap;
+    // WebListener info store
+    private Set<ServletContextAttributeListener> servletContextAttributeListeners;
+    private Set<ServletRequestListener> servletRequestListeners;
+    private Set<ServletRequestAttributeListener> servletRequestAttributeListeners;
+    private Set<HttpSessionAttributeListener> httpSessionAttributeListeners;
+    private Set<HttpSessionIdListener> httpSessionIdListeners;
+    private Set<HttpSessionListener> httpSessionListeners;
     // Encoding
     private String requestCharacterEncoding;
     private String responseCharacterEncoding;
@@ -563,13 +569,53 @@ public class ServletContextImpl implements ServletContext {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void addListener(Class<? extends EventListener> listenerClass) {
-
+        /*ServletContextAttributeListener
+                ServletRequestListener
+        ServletRequestAttributeListener
+        jakarta.servlet.http.HttpSessionAttributeListener
+        jakarta.servlet.http.HttpSessionIdListener
+        jakarta.servlet.http.HttpSessionListener*/
+        try {
+            if (ServletContextAttributeListener.class.isAssignableFrom(listenerClass)) {
+                ServletContextAttributeListener listener =
+                        createListener((Class<ServletContextAttributeListener>) listenerClass);
+                servletContextAttributeListeners.add(listener);
+            } else if (ServletRequestListener.class.isAssignableFrom(listenerClass)) {
+                ServletRequestListener listener =
+                        createListener((Class<ServletRequestListener>) listenerClass);
+                servletRequestListeners.add(listener);
+            } else if (ServletRequestAttributeListener.class.isAssignableFrom(listenerClass)) {
+                ServletRequestAttributeListener listener =
+                        createListener((Class<ServletRequestAttributeListener>) listenerClass);
+                servletRequestAttributeListeners.add(listener);
+            } else if (HttpSessionAttributeListener.class.isAssignableFrom(listenerClass)) {
+                HttpSessionAttributeListener listener =
+                        createListener((Class<HttpSessionAttributeListener>) listenerClass);
+                httpSessionAttributeListeners.add(listener);
+            } else if (HttpSessionIdListener.class.isAssignableFrom(listenerClass)) {
+                HttpSessionIdListener listener =
+                        createListener((Class<HttpSessionIdListener>) listenerClass);
+                httpSessionIdListeners.add(listener);
+            } else if (HttpSessionListener.class.isAssignableFrom(listenerClass)) {
+                HttpSessionListener listener =
+                        createListener((Class<HttpSessionListener>) listenerClass);
+                httpSessionListeners.add(listener);
+            }
+        } catch (ServletException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public <T extends EventListener> T createListener(Class<T> clazz) throws ServletException {
-        return null;
+        try {
+            return clazz.getConstructor().newInstance();
+        } catch (InstantiationException | IllegalAccessException |
+                 InvocationTargetException | NoSuchMethodException e) {
+            throw new ServletException("Create listener exception:" + e);
+        }
     }
 
     @Override
