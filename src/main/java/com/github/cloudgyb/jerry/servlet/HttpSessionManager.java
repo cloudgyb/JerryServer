@@ -48,8 +48,8 @@ public class HttpSessionManager implements Runnable {
 
     @Override
     public void run() {
-        if (logger.isDebugEnabled()) {
-            logger.debug("Checking timeout sessions.");
+        if (logger.isTraceEnabled()) {
+            logger.trace("Checking timeout sessions.");
         }
         for (HttpSessionImpl session : sessionMap.values()) {
             int maxInactiveInterval = session.getMaxInactiveInterval();
@@ -60,8 +60,8 @@ public class HttpSessionManager implements Runnable {
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastAccessedTime > maxInactiveInterval * 1000L) {
                 session.invalidate();
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Clearing timeout session(id:{})", session.getId());
+                if (logger.isTraceEnabled()) {
+                    logger.trace("Clearing timeout session(id:{})", session.getId());
                 }
             }
         }
