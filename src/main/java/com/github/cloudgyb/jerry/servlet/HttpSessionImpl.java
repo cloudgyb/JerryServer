@@ -2,16 +2,19 @@ package com.github.cloudgyb.jerry.servlet;
 
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSessionAttributeListener;
+import jakarta.servlet.http.HttpSessionBindingEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * @author geng
  * @since 2025/02/12 14:38:45
  */
 public class HttpSessionImpl implements HttpSession {
-    private ServletContext servletContext;
+    private ServletContextImpl servletContext;
     private HttpSessionManager sessionManager;
     private final long creationTime;
     private volatile long lastAccessedTime;
@@ -21,7 +24,7 @@ public class HttpSessionImpl implements HttpSession {
     private volatile int maxInactiveInterval;
     private boolean invalidated = false;
 
-    public HttpSessionImpl(HttpSessionManager sessionManager, ServletContext servletContext) {
+    public HttpSessionImpl(HttpSessionManager sessionManager, ServletContextImpl servletContext) {
         this.sessionManager = sessionManager;
         this.servletContext = servletContext;
         this.attributes = new ConcurrentHashMap<>();
@@ -77,12 +80,22 @@ public class HttpSessionImpl implements HttpSession {
 
     @Override
     public void setAttribute(String name, Object value) {
+        Object oldValue = attributes.get(name);
         attributes.put(name, value);
+        HttpSessionBindingEvent event = new HttpSessionBindingEvent(
+                this, name, oldValue != null ? oldValue : value);
+        Consumer<HttpSessionAttributeListener> consumer = oldValue == null ?
+                (l) -> l.attributeAdded(event) :
+                (l) -> l.attributeReplaced(event);
+        servletContext.httpSessionAttributeListeners().forEach(consumer);
     }
 
     @Override
     public void removeAttribute(String name) {
-        attributes.remove(name);
+        Object value = attributes.remove(name);
+        HttpSessionBindingEvent event = new HttpSessionBindingEvent(this, name, value);
+        servletContext.httpSessionAttributeListeners()
+                .forEach(l -> l.attributeRemoved(event));
     }
 
     @Override

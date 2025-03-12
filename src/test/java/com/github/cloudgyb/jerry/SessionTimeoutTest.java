@@ -6,8 +6,6 @@ import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
 import junit.framework.TestCase;
 
 import java.net.URL;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -18,11 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SessionTimeoutTest extends TestCase {
     public void test() throws InterruptedException {
         ServletContextImpl servletContext = new ServletContextImpl("/", new WebAppClassLoader(new URL[0]));
-        HttpSessionManager httpSessionManager = new HttpSessionManager();
-        httpSessionManager.createSession(servletContext);
-        httpSessionManager.createSession(servletContext);
-        httpSessionManager.createSession(servletContext);
-        httpSessionManager.createSession(servletContext);
+        HttpSessionManager httpSessionManager = new HttpSessionManager(servletContext);
+        httpSessionManager.createSession();
+        httpSessionManager.createSession();
+        httpSessionManager.createSession();
+        httpSessionManager.createSession();
         Thread.sleep(5000);
         httpSessionManager.destroy();
     }

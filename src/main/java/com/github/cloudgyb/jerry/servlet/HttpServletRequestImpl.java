@@ -12,6 +12,7 @@ import java.io.*;
 import java.nio.charset.Charset;
 import java.security.Principal;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * @author cloudgyb
@@ -50,7 +51,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
         if (isMultipart) {
             parts = new ArrayList<>();
             JakartaServletFileUpload<DiskFileItem, DiskFileItemFactory> uploadParser = new JakartaServletFileUpload<>();
-            uploadParser.setFileItemFactory( new DiskFileItemFactory.Builder().get());
+            uploadParser.setFileItemFactory(new DiskFileItemFactory.Builder().get());
             try {
                 List<DiskFileItem> diskFileItems = uploadParser.parseRequest(this);
                 for (DiskFileItem diskFileItem : diskFileItems) {
@@ -269,14 +270,23 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     private HttpSessionImpl createSession() {
-        HttpSessionImpl session = servletContext.sessionManager.createSession(servletContext);
+        String oldSessionId = jsessionid;
+        HttpSessionImpl session = servletContext.sessionManager.createSession();
         jsessionid = session.getId();
+        HttpSessionEvent httpSessionEvent = new HttpSessionEvent(session);
+        servletContext.httpSessionIdListeners().forEach(
+                l -> l.sessionIdChanged(httpSessionEvent, oldSessionId)
+        );
         return session;
     }
 
     @Override
     public String changeSessionId() {
-        return "";
+        if (jsessionid == null) {
+            throw new IllegalStateException("there is no session associated with the request!");
+        }
+        HttpSessionImpl session = createSession();
+        return session.getId();
     }
 
     @Override
@@ -295,22 +305,22 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     @Override
-    public boolean authenticate(HttpServletResponse httpServletResponse) throws IOException, ServletException {
+    public boolean authenticate(HttpServletResponse httpServletResponse) {
         return false;
     }
 
     @Override
-    public void login(String s, String s1) throws ServletException {
+    public void login(String s, String s1) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void logout() throws ServletException {
+    public void logout() {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public Collection<Part> getParts() throws IOException, ServletException {
+    public Collection<Part> getParts() {
         if (parts == null) {
             return Collections.emptyList();
         }
@@ -318,12 +328,18 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     @Override
-    public Part getPart(String s) throws IOException, ServletException {
-        return null;
+    public Part getPart(String s) {
+        if (parts == null) {
+            return null;
+        }
+        return parts.stream()
+                .filter(p -> s.equals(p.getName()))
+                .findFirst()
+                .orElse(null);
     }
 
     @Override
-    public <T extends HttpUpgradeHandler> T upgrade(Class<T> aClass) throws IOException, ServletException {
+    public <T extends HttpUpgradeHandler> T upgrade(Class<T> aClass) {
         throw new UnsupportedOperationException();
     }
 
@@ -418,7 +434,7 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     @Override
-    public BufferedReader getReader() throws IOException {
+    public BufferedReader getReader() {
         return new BufferedReader(new InputStreamReader(httpExchange.getRequestBody()));
     }
 
@@ -433,13 +449,25 @@ public class HttpServletRequestImpl implements HttpServletRequest {
     }
 
     @Override
-    public void setAttribute(String s, Object o) {
-        attributeMap.put(s, o);
+    public void setAttribute(String s, Object value) {
+        Object oldValue = attributeMap.get(s);
+        attributeMap.put(s, value);
+        ServletRequestAttributeEvent event = new ServletRequestAttributeEvent(
+                servletContext, this, s, oldValue != null ? oldValue : value);
+        Consumer<ServletRequestAttributeListener> consumer = oldValue == null ?
+                (l) -> l.attributeAdded(event) :
+                (l) -> l.attributeReplaced(event);
+        servletContext.servletRequestAttributeListeners().forEach(consumer);
     }
 
     @Override
     public void removeAttribute(String s) {
-        attributeMap.remove(s);
+        Object value = attributeMap.remove(s);
+        ServletRequestAttributeEvent event = new ServletRequestAttributeEvent(
+                servletContext, this, s, value);
+        servletContext.servletRequestAttributeListeners().forEach(
+                l -> l.attributeRemoved(event)
+        );
     }
 
     @Override

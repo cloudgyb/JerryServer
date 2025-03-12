@@ -25,6 +25,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -49,12 +50,12 @@ public class ServletContextImpl implements ServletContext {
     private final Map<String, FilterRegistrationImpl> nameToFilterRegistrationMap;
     private final Map<String, Set<Filter>> servletNameToFilterMap;
     // WebListener info store
-    private Set<ServletContextAttributeListener> servletContextAttributeListeners;
-    private Set<ServletRequestListener> servletRequestListeners;
-    private Set<ServletRequestAttributeListener> servletRequestAttributeListeners;
-    private Set<HttpSessionAttributeListener> httpSessionAttributeListeners;
-    private Set<HttpSessionIdListener> httpSessionIdListeners;
-    private Set<HttpSessionListener> httpSessionListeners;
+    private final Set<ServletContextAttributeListener> servletContextAttributeListeners;
+    private final Set<ServletRequestListener> servletRequestListeners;
+    private final Set<ServletRequestAttributeListener> servletRequestAttributeListeners;
+    private final Set<HttpSessionAttributeListener> httpSessionAttributeListeners;
+    private final Set<HttpSessionIdListener> httpSessionIdListeners;
+    private final Set<HttpSessionListener> httpSessionListeners;
     // Encoding
     private String requestCharacterEncoding;
     private String responseCharacterEncoding;
@@ -106,11 +107,17 @@ public class ServletContextImpl implements ServletContext {
         this.servletNameToFilterMap = new HashMap<>();
         this.requestCharacterEncoding = requestCharacterEncoding;
         this.responseCharacterEncoding = responseCharacterEncoding;
-        this.sessionManager = new HttpSessionManager();
+        this.sessionManager = new HttpSessionManager(this);
         this.initParams = new HashMap<>();
         this.sessionTimeout = sessionTimeout;
         this.webApplicationDisplayName = webApplicationDisplayName;
         this.logger = LoggerFactory.getLogger(contextPath);
+        this.servletContextAttributeListeners = new HashSet<>();
+        this.servletRequestListeners = new HashSet<>();
+        this.servletRequestAttributeListeners = new HashSet<>();
+        this.httpSessionAttributeListeners = new HashSet<>();
+        this.httpSessionIdListeners = new HashSet<>();
+        this.httpSessionListeners = new HashSet<>();
     }
 
     public void init() throws ServletException {
@@ -159,6 +166,9 @@ public class ServletContextImpl implements ServletContext {
     }
 
     public void process(HttpServletRequest request, HttpServletResponse response) {
+        ServletRequestEvent requestEvent = new ServletRequestEvent(this, request);
+        servletRequestListeners.forEach(l -> l.requestInitialized(requestEvent));
+
         String requestURI = request.getRequestURI();
         requestURI = requestURI.replaceFirst(contextPath, "");
         if (requestURI.isEmpty()) {
@@ -200,6 +210,7 @@ public class ServletContextImpl implements ServletContext {
             } catch (IOException e) {
                 System.err.println(e.getMessage());
             }
+            servletRequestListeners.forEach(l -> l.requestDestroyed(requestEvent));
         }
     }
 
@@ -273,7 +284,7 @@ public class ServletContextImpl implements ServletContext {
     }
 
     @Override
-    public URL getResource(String path) throws MalformedURLException {
+    public URL getResource(String path) {
         return null;
     }
 
@@ -353,13 +364,23 @@ public class ServletContextImpl implements ServletContext {
     }
 
     @Override
-    public void setAttribute(String name, Object object) {
-        attributes.put(name, object);
+    public void setAttribute(String name, Object value) {
+        Object oldValue = attributes.get(name);
+        attributes.put(name, value);
+        ServletContextAttributeEvent event = new ServletContextAttributeEvent(
+                this, name, oldValue == null ? value : oldValue);
+        Consumer<ServletContextAttributeListener> consumer =
+                oldValue == null ? (l) -> l.attributeAdded(event) :
+                        (l) -> l.attributeReplaced(event);
+        servletContextAttributeListeners.forEach(consumer);
     }
 
     @Override
     public void removeAttribute(String name) {
-        attributes.remove(name);
+        Object value = attributes.remove(name);
+        ServletContextAttributeEvent event = new ServletContextAttributeEvent(
+                this, name, value);
+        servletContextAttributeListeners.forEach(l -> l.attributeRemoved(event));
     }
 
     @Override
@@ -707,5 +728,21 @@ public class ServletContextImpl implements ServletContext {
 
     public boolean isInitialized() {
         return initialized;
+    }
+
+    Set<ServletRequestAttributeListener> servletRequestAttributeListeners() {
+        return servletRequestAttributeListeners;
+    }
+
+    Set<HttpSessionAttributeListener> httpSessionAttributeListeners() {
+        return httpSessionAttributeListeners;
+    }
+
+    Set<HttpSessionIdListener> httpSessionIdListeners() {
+        return httpSessionIdListeners;
+    }
+
+    Set<HttpSessionListener> httpSessionListeners() {
+        return httpSessionListeners;
     }
 }

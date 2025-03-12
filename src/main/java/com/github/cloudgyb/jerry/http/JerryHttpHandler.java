@@ -19,13 +19,8 @@ public class JerryHttpHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) {
-        //Thread.currentThread().setContextClassLoader(servletContext.getClassLoader());
-        try {
-            HttpServletRequestImpl httpServletRequest = new HttpServletRequestImpl(exchange, servletContext);
-            HttpServletResponseImpl httpServletResponse = new HttpServletResponseImpl(exchange, httpServletRequest);
-            servletContext.process(httpServletRequest, httpServletResponse);
-        }finally {
-            //Thread.currentThread().setContextClassLoader(null);
-        }
+        HttpServletRequestImpl httpServletRequest = new HttpServletRequestImpl(exchange, servletContext);
+        HttpServletResponseImpl httpServletResponse = new HttpServletResponseImpl(exchange, httpServletRequest);
+        servletContext.process(httpServletRequest, httpServletResponse);
     }
 }

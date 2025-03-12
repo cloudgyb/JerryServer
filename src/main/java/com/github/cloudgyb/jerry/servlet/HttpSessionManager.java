@@ -1,6 +1,7 @@
 package com.github.cloudgyb.jerry.servlet;
 
 import jakarta.annotation.Nonnull;
+import jakarta.servlet.http.HttpSessionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,10 +17,12 @@ import java.util.concurrent.*;
 public class HttpSessionManager implements Runnable {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     String SESSION_ID_KEY = "jsessionid";
+    private final ServletContextImpl servletContext;
     private final Map<String, HttpSessionImpl> sessionMap;
     private final ScheduledExecutorService sessionTimeoutCheckThread;
 
-    public HttpSessionManager() {
+    public HttpSessionManager(ServletContextImpl servletContext) {
+        this.servletContext = servletContext;
         this.sessionMap = new ConcurrentHashMap<>();
         this.sessionTimeoutCheckThread = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
             int count = 0;
@@ -36,14 +39,20 @@ public class HttpSessionManager implements Runnable {
         return sessionMap.get(id);
     }
 
-    public HttpSessionImpl createSession(ServletContextImpl servletContext) {
+    public HttpSessionImpl createSession() {
         HttpSessionImpl httpSession = new HttpSessionImpl(this, servletContext);
         sessionMap.put(httpSession.getId(), httpSession);
+        HttpSessionEvent httpSessionEvent = new HttpSessionEvent(httpSession);
+        servletContext.httpSessionListeners().forEach(l -> l.sessionCreated(httpSessionEvent));
         return httpSession;
     }
 
     public void removeSession(String id) {
-        sessionMap.remove(id);
+        HttpSessionImpl httpSession = sessionMap.remove(id);
+        if (httpSession != null) {
+            HttpSessionEvent httpSessionEvent = new HttpSessionEvent(httpSession);
+            servletContext.httpSessionListeners().forEach(l -> l.sessionDestroyed(httpSessionEvent));
+        }
     }
 
     @Override
