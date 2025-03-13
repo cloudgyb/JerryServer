@@ -10,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
+ * The standard implement of HttpSession interface.
+ *
  * @author geng
  * @since 2025/02/12 14:38:45
  */
@@ -101,6 +103,8 @@ public class HttpSessionImpl implements HttpSession {
     @Override
     public void invalidate() {
         invalidated = true;
+        Set<String> attrNames = attributes.keySet();
+        attrNames.forEach(this::removeAttribute);
         attributes.clear();
         sessionManager.removeSession(getId());
         sessionManager = null;

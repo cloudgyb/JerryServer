@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -29,7 +28,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Servlet Context 实现类
+ * The standard implement of <code>ServletContext</code>.
  *
  * @author geng
  * @since 2025/02/12 16:26:56
@@ -46,7 +45,6 @@ public class ServletContextImpl implements ServletContext {
     private final Map<String, ServletRegistrationImpl> nameToServletRegistrationMap;
     // Filter info store
     final List<FilterMapping> filterMappings;
-    private final Map<String, Filter> nameToFilterMap;
     private final Map<String, FilterRegistrationImpl> nameToFilterRegistrationMap;
     private final Map<String, Set<Filter>> servletNameToFilterMap;
     // WebListener info store
@@ -102,7 +100,6 @@ public class ServletContextImpl implements ServletContext {
         this.nameToServletMap = new HashMap<>();
         this.nameToServletRegistrationMap = new HashMap<>();
         this.filterMappings = new ArrayList<>();
-        this.nameToFilterMap = new HashMap<>();
         this.nameToFilterRegistrationMap = new HashMap<>();
         this.servletNameToFilterMap = new HashMap<>();
         this.requestCharacterEncoding = requestCharacterEncoding;
@@ -499,7 +496,6 @@ public class ServletContextImpl implements ServletContext {
         if (filterName == null || filterName.isEmpty()) {
             throw new IllegalArgumentException();
         }
-        nameToFilterMap.put(filterName, filter);
         FilterRegistrationImpl filterRegistration = new FilterRegistrationImpl(this, filterName, filter);
         nameToFilterRegistrationMap.put(filterName, filterRegistration);
         WebFilter webFilterAnnotation = filter.getClass().getAnnotation(WebFilter.class);
@@ -525,7 +521,6 @@ public class ServletContextImpl implements ServletContext {
                 filterRegistration.setInitParameter(webInitParam.name(), webInitParam.value());
             }
         }
-        nameToFilterMap.put(filterName, filter);
 
         return filterRegistration;
     }
@@ -592,12 +587,6 @@ public class ServletContextImpl implements ServletContext {
     @Override
     @SuppressWarnings("unchecked")
     public void addListener(Class<? extends EventListener> listenerClass) {
-        /*ServletContextAttributeListener
-                ServletRequestListener
-        ServletRequestAttributeListener
-        jakarta.servlet.http.HttpSessionAttributeListener
-        jakarta.servlet.http.HttpSessionIdListener
-        jakarta.servlet.http.HttpSessionListener*/
         try {
             if (ServletContextAttributeListener.class.isAssignableFrom(listenerClass)) {
                 ServletContextAttributeListener listener =
@@ -744,5 +733,28 @@ public class ServletContextImpl implements ServletContext {
 
     Set<HttpSessionListener> httpSessionListeners() {
         return httpSessionListeners;
+    }
+
+
+    public void destroy() {
+        attributes.keySet().forEach(this::removeAttribute);
+        sessionManager.destroy();
+        for (FilterRegistrationImpl registration : nameToFilterRegistrationMap.values()) {
+            registration.getFilter().destroy();
+        }
+        nameToFilterRegistrationMap.clear();
+        for (ServletRegistrationImpl registration : nameToServletRegistrationMap.values()) {
+            registration.servlet.destroy();
+        }
+        nameToServletRegistrationMap.clear();
+        servletNameToFilterMap.clear();
+        servletMappings.clear();
+        filterMappings.clear();
+        servletContextAttributeListeners.clear();
+        servletRequestListeners.clear();
+        servletRequestAttributeListeners.clear();
+        httpSessionAttributeListeners.clear();
+        httpSessionIdListeners.clear();
+        httpSessionListeners.clear();
     }
 }

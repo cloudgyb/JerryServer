@@ -1,29 +1,19 @@
 package com.github.cloudgyb.jerry.http;
 
-import com.github.cloudgyb.jerry.loader.WebAppClassLoader;
-import com.github.cloudgyb.jerry.servlet.DefaultServlet;
-import com.github.cloudgyb.jerry.servlet.HelloServlet;
 import com.github.cloudgyb.jerry.servlet.ServletContextFactory;
 import com.github.cloudgyb.jerry.servlet.ServletContextImpl;
-import com.github.cloudgyb.jerry.servlet.filter.TestFilter;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRegistration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.jar.JarFile;
 
 /**
  * Http Server 实现类
@@ -32,7 +22,6 @@ import java.util.jar.JarFile;
  * @since 2025/2/10 20:45
  */
 public class JerryHttpServer {
-    private static final String defaultContextPath = "/";
     private static final Logger logger = LoggerFactory.getLogger(JerryHttpServer.class);
     private final InetSocketAddress address;
     private final HttpServer httpServer;
@@ -71,6 +60,10 @@ public class JerryHttpServer {
 
     public void stop() {
         httpServer.stop(2);
+        servletContextMap.forEach((k, servletContext) -> {
+            logger.debug("Destroy ServletContext: {}", k);
+            servletContext.destroy();
+        });
         servletContextMap.clear();
         if (logger.isInfoEnabled()) {
             logger.info("The JerryServer is stopped!");

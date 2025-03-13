@@ -85,8 +85,8 @@ public class HttpSessionManager implements Runnable {
             } else {
                 sessionTimeoutCheckThread.shutdownNow();
             }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+        } catch (InterruptedException ignore) {
+            sessionTimeoutCheckThread.shutdownNow();
         }
         for (HttpSessionImpl session : sessionMap.values()) {
             session.invalidate();
