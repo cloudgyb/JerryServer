@@ -30,16 +30,30 @@ public class ServletOutputStreamImpl extends ServletOutputStream {
 
     @Override
     public void setWriteListener(WriteListener writeListener) {
-        this.writeListener = writeListener;
+        try {
+            this.writeListener = writeListener;
+            writeListener.onWritePossible();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public void write(int b) throws IOException {
         if (!response.isCommitted()) {
-            response.setContentLength(0);
+            if (response.getContentLength() == -1) {
+                response.setContentLength(0);
+            }
             response.commit();
         }
-        outputStream.write(b);
+        try {
+            outputStream.write(b);
+        } catch (IOException e) {
+            if (writeListener != null) {
+                writeListener.onError(e);
+            }
+            throw e;
+        }
     }
 
     @Override

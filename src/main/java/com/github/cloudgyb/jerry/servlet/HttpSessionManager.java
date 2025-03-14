@@ -81,7 +81,7 @@ public class HttpSessionManager implements Runnable {
         try {
             boolean b = sessionTimeoutCheckThread.awaitTermination(2, TimeUnit.SECONDS);
             if (b) {
-                System.out.println("SessionTimeoutCheckThread terminated!");
+                logger.debug("SessionTimeoutCheckThread terminated!");
             } else {
                 sessionTimeoutCheckThread.shutdownNow();
             }

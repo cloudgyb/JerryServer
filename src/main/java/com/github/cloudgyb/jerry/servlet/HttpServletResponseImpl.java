@@ -34,6 +34,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     private String contentType = null;
     private long contentLength = -1;
     private final ServletOutputStream outputStream;
+    private PrintWriter writer;
     private Locale locale = Locale.getDefault();
     private byte outputMethodIsCalled = 0;
 
@@ -245,13 +246,31 @@ public class HttpServletResponseImpl implements HttpServletResponse {
         return outputStream;
     }
 
+    ServletOutputStream getServletOutputStream() {
+        return outputStream;
+    }
+
     @Override
     public PrintWriter getWriter() {
         if (outputMethodIsCalled != 0 && outputMethodIsCalled != 2) {
             throw new IllegalStateException("getOutputStream() has already been called!");
         }
         outputMethodIsCalled = 2;
-        return new PrintWriter(outputStream, true, Charset.forName(getCharacterEncoding()));
+        if (!isCommit) {
+            if(contentLength == -1) {
+                contentLength = 0;
+            }
+            commit();
+        }
+        if (writer == null) {
+            writer = new PrintWriter(httpExchange.getResponseBody(), true,
+                    Charset.forName(getCharacterEncoding()));
+        }
+        return writer;
+    }
+
+    PrintWriter getPrintWriter() {
+        return writer;
     }
 
     @Override
@@ -265,6 +284,10 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     @Override
     public void setContentLength(int len) {
         setContentLengthLong(len);
+    }
+
+    long getContentLength() {
+        return contentLength;
     }
 
     @Override
