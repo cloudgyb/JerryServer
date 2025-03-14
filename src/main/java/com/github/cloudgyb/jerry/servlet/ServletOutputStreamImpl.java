@@ -36,6 +36,7 @@ public class ServletOutputStreamImpl extends ServletOutputStream {
     @Override
     public void write(int b) throws IOException {
         if (!response.isCommitted()) {
+            response.setContentLength(0);
             response.commit();
         }
         outputStream.write(b);
