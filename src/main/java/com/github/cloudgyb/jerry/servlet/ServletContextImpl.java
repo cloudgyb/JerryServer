@@ -200,7 +200,7 @@ public class ServletContextImpl implements ServletContext {
                 }
             }
         } catch (Throwable e) {
-            throw new RuntimeException(e);
+            logger.error("process request exception: ", e);
         } finally {
             try {
                 response.flushBuffer();
