@@ -104,6 +104,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void sendError(int sc, String msg) throws IOException {
+        checkIfCommitted();
         statusCode = sc;
         byte[] bytes = msg.getBytes(StandardCharsets.UTF_8);
         responseHeaders.set("Content-Type", "text/html; charset=utf-8");
