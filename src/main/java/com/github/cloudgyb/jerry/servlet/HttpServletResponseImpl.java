@@ -123,6 +123,7 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
+        checkIfCommitted();
         statusCode = sc;
         responseHeaders.set("Location", location);
         httpExchange.sendResponseHeaders(sc, -1);
