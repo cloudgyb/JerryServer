@@ -54,18 +54,18 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     }
 
     void end() throws IOException {
-        if (isCommit)
-            return;
-        if(writer != null) {
-            writer.flush();
+        if (!isCommit) {
+            if (writer != null) {
+                writer.flush();
+            }
+            int count = outputBuffer.getCount();
+            if (count == 0) {
+                contentLength = -1; // Content-Length is 0
+            } else {
+                contentLength = count;
+            }
+            commit();
         }
-        int count = outputBuffer.getCount();
-        if (count == 0) {
-            contentLength = -1; // Content-Length is 0
-        } else {
-            contentLength = count;
-        }
-        commit();
         outputBuffer.close();
         httpExchange.close();
     }
