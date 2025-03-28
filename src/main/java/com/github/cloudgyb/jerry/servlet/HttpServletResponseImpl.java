@@ -1,6 +1,7 @@
 package com.github.cloudgyb.jerry.servlet;
 
 import com.github.cloudgyb.jerry.ServerInfo;
+import com.github.cloudgyb.jerry.servlet.buffer.OutputBuffer;
 import com.github.cloudgyb.jerry.util.DateUtil;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -8,8 +9,11 @@ import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +29,7 @@ import java.util.Objects;
  */
 public class HttpServletResponseImpl implements HttpServletResponse {
     private final static String DEFAULT_CHARACTER_ENCODING = "ISO-8859-1";
+    private static final Logger log = LoggerFactory.getLogger(HttpServletResponseImpl.class);
     boolean isCommit = false;
     private final HttpExchange httpExchange;
     private final HttpServletRequestImpl requestImpl;
@@ -33,20 +38,36 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     private String characterEncoding;
     private String contentType = null;
     private long contentLength = -1;
-    private final ServletOutputStream outputStream;
+    private int bufferSize = 4096;
+    private final OutputBuffer outputBuffer;
+    private ServletOutputStream outputStream;
     private PrintWriter writer;
     private Locale locale = Locale.getDefault();
-    private byte outputMethodIsCalled = 0;
 
     public HttpServletResponseImpl(HttpExchange httpExchange, HttpServletRequestImpl requestImpl) {
         this.httpExchange = httpExchange;
         this.requestImpl = requestImpl;
         this.responseHeaders = httpExchange.getResponseHeaders();
-        this.outputStream = new ServletOutputStreamImpl(this.httpExchange, this);
+        this.outputBuffer = new OutputBuffer(bufferSize, httpExchange.getResponseBody());
+        this.outputBuffer.setBufferFlushLister(this::commit);
         this.characterEncoding = requestImpl.getServletContext().getResponseCharacterEncoding();
     }
 
-    void commit() {
+    void end() throws IOException {
+        if (isCommit)
+            return;
+        int count = outputBuffer.getCount();
+        if (count == 0) {
+            contentLength = -1; // Content-Length is 0
+        } else {
+            contentLength = count;
+        }
+        commit();
+        outputBuffer.close();
+        httpExchange.close();
+    }
+
+    private void commit() {
         if (isCommit)
             return;
         try {
@@ -71,6 +92,12 @@ public class HttpServletResponseImpl implements HttpServletResponse {
                 sessionCookie.setDomain(requestImpl.getServerName());
                 sessionCookie.setHttpOnly(true);
                 addCookie(sessionCookie);
+            }
+            // Methods to write data were not called.
+            if (outputStream == null && writer == null) {
+                CL = -1; // Content-Length is 0
+            } else if (CL == -1) {
+                CL = 0; // Use chunked encoding
             }
             httpExchange.sendResponseHeaders(statusCode, CL);
             isCommit = true;
@@ -241,43 +268,35 @@ public class HttpServletResponseImpl implements HttpServletResponse {
 
     @Override
     public ServletOutputStream getOutputStream() {
-        if (outputMethodIsCalled != 0 && outputMethodIsCalled != 1) {
+        if (writer != null) {
             throw new IllegalStateException("getWriter() has already been called!");
         }
-        outputMethodIsCalled = 1;
-        return outputStream;
-    }
-
-    ServletOutputStream getServletOutputStream() {
+        if (outputStream == null) {
+            this.outputStream = new ServletOutputStreamImpl(this.outputBuffer);
+        }
         return outputStream;
     }
 
     @Override
     public PrintWriter getWriter() {
-        if (outputMethodIsCalled != 0 && outputMethodIsCalled != 2) {
+        if (outputStream != null) {
             throw new IllegalStateException("getOutputStream() has already been called!");
         }
-        outputMethodIsCalled = 2;
-        if (!isCommit) {
-            if(contentLength == -1) {
-                contentLength = 0;
-            }
-            commit();
-        }
         if (writer == null) {
-            writer = new PrintWriter(httpExchange.getResponseBody(), true,
-                    Charset.forName(getCharacterEncoding()));
+            OutputStreamWriter out = new OutputStreamWriter(
+                    outputBuffer,
+                    Charset.forName(getCharacterEncoding())
+            );
+            writer = new PrintWriter(out, false);
         }
-        return writer;
-    }
-
-    PrintWriter getPrintWriter() {
         return writer;
     }
 
     @Override
     public void setCharacterEncoding(String encoding) {
-        if (isCommit || outputMethodIsCalled == 2) { //Return if the response has already been committed or getWriter has been called.
+        if (isCommit || writer != null) { //Return if the response has already been committed or getWriter has been called.
+            log.warn("The encoding setting will have no effect once " +
+                    "the response is committed or getWriter() has been called.");
             return;
         }
         characterEncoding = encoding;
@@ -286,10 +305,6 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     @Override
     public void setContentLength(int len) {
         setContentLengthLong(len);
-    }
-
-    long getContentLength() {
-        return contentLength;
     }
 
     @Override
@@ -308,26 +323,24 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     @Override
     public void setBufferSize(int size) {
         checkIfCommitted();
-        throw new UnsupportedOperationException();
+        outputBuffer.setSize(size);
+        bufferSize = size;
     }
 
     @Override
     public int getBufferSize() {
-        return 0;
+        return bufferSize;
     }
 
     @Override
     public void flushBuffer() throws IOException {
-        if (!isCommit) {
-            commit();
-        }
-        httpExchange.getResponseBody().flush();
+        outputBuffer.flush();
     }
 
     @Override
     public void resetBuffer() {
         checkIfCommitted();
-        throw new UnsupportedOperationException();
+        outputBuffer.clear();
     }
 
     @Override
@@ -338,14 +351,15 @@ public class HttpServletResponseImpl implements HttpServletResponse {
     @Override
     public void reset() {
         checkIfCommitted();
+        outputBuffer.clear();
         statusCode = 200;
-        outputMethodIsCalled = 0;
         responseHeaders.clear();
     }
 
     @Override
     public void setLocale(Locale loc) {
         if (isCommit) {
+            log.warn("The locale setting will have no effect once the response is committed.");
             return;
         }
         locale = loc;

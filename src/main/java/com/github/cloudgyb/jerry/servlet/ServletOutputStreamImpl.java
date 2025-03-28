@@ -1,5 +1,6 @@
 package com.github.cloudgyb.jerry.servlet;
 
+import com.github.cloudgyb.jerry.servlet.buffer.OutputBuffer;
 import com.sun.net.httpserver.HttpExchange;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -8,19 +9,18 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
+ * A standard ServletOutputStream implementation.
+ *
  * @author cloudgyb
  * @since 2025/2/15 22:24
  */
 public class ServletOutputStreamImpl extends ServletOutputStream {
     private WriteListener writeListener;
-    private final HttpExchange exchange;
-    private final HttpServletResponseImpl response;
-    private final OutputStream outputStream;
+    private final OutputBuffer outputBuffer;
+    private boolean isClosed = false;
 
-    public ServletOutputStreamImpl(HttpExchange exchange, HttpServletResponseImpl response) {
-        this.exchange = exchange;
-        this.outputStream = exchange.getResponseBody();
-        this.response = response;
+    public ServletOutputStreamImpl(OutputBuffer outputBuffer) {
+        this.outputBuffer = outputBuffer;
     }
 
     @Override
@@ -40,14 +40,11 @@ public class ServletOutputStreamImpl extends ServletOutputStream {
 
     @Override
     public void write(int b) throws IOException {
-        if (!response.isCommitted()) {
-            if (response.getContentLength() == -1) {
-                response.setContentLength(0);
-            }
-            response.commit();
+        if (isClosed) {
+            throw new IOException("ServletOutputStream is closed");
         }
         try {
-            outputStream.write(b);
+            outputBuffer.write(b);
         } catch (IOException e) {
             if (writeListener != null) {
                 writeListener.onError(e);
@@ -57,8 +54,15 @@ public class ServletOutputStreamImpl extends ServletOutputStream {
     }
 
     @Override
-    public void close() throws IOException {
-        outputStream.close();
-        exchange.close();
+    public void flush() throws IOException {
+        if (isClosed) {
+            throw new IOException("ServletOutputStream is closed");
+        }
+        outputBuffer.flush();
+    }
+
+    @Override
+    public void close() {
+        isClosed = true;
     }
 }

@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
@@ -203,14 +202,9 @@ public class ServletContextImpl implements ServletContext {
             logger.error("process request exception: ", e);
         } finally {
             try {
-                response.flushBuffer();
                 if (response instanceof HttpServletResponseImpl) {
                     HttpServletResponseImpl resp = (HttpServletResponseImpl) response;
-                    PrintWriter printWriter = resp.getPrintWriter();
-                    if (printWriter != null) {
-                        printWriter.close();
-                    }
-                    resp.getServletOutputStream().close();
+                    resp.end();
                 }
             } catch (IOException e) {
                 System.err.println(e.getMessage());
